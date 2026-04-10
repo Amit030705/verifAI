@@ -1,0 +1,40 @@
+# OS / editor files
+.DS_Store
+.idea/
+.vscode/
+
+# Python cache / build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment files
+.env
+.env.*
+
+# Logs
+*.log
+
+# Local upload/runtime folders
+uploads/
+*/uploads/
+
+# Docker overrides and temporary files
+docker-compose.override.yml
+*.pid

@@ -1,0 +1,22 @@
+services:
+  coding-analyzer-dev:
+    build:
+      context: ./coding-analyzer
+      dockerfile: Dockerfile.dev
+    container_name: coding-analyzer-dev
+    ports:
+      - "18080:8080"
+    volumes:
+      - ./coding-analyzer:/app
+    restart: unless-stopped
+
+  resume-analyzer-dev:
+    build:
+      context: ./resume-analyzer
+      dockerfile: Dockerfile.dev
+    container_name: resume-analyzer-dev
+    ports:
+      - "18081:8080"
+    volumes:
+      - ./resume-analyzer:/app
+    restart: unless-stopped

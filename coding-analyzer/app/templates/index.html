@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VeriAI Coding Analyzer</title>
+    <style>
+      :root {
+        --bg: #f5f7fb;
+        --card: #ffffff;
+        --text: #10243f;
+        --muted: #5d6e85;
+        --accent: #006d77;
+        --danger: #ad1f2d;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        background: linear-gradient(135deg, #edf4ff 0%, #f7fbfc 100%);
+        color: var(--text);
+      }
+
+      .wrap {
+        width: min(860px, 92vw);
+        margin: 42px auto;
+        background: var(--card);
+        border-radius: 16px;
+        box-shadow: 0 14px 42px rgba(16, 36, 63, 0.12);
+        padding: 28px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 1.8rem;
+      }
+
+      p {
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      label {
+        font-size: 0.9rem;
+        font-weight: 600;
+      }
+
+      input {
+        border: 1px solid #cfdae7;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 0.95rem;
+      }
+
+      button {
+        width: fit-content;
+        margin-top: 6px;
+        border: 0;
+        background: var(--accent);
+        color: #fff;
+        border-radius: 10px;
+        padding: 10px 16px;
+        cursor: pointer;
+        font-size: 0.95rem;
+      }
+
+      button:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
+
+      .status {
+        min-height: 22px;
+        margin-top: 10px;
+        color: var(--muted);
+      }
+
+      .status.error {
+        color: var(--danger);
+      }
+
+      pre {
+        margin-top: 16px;
+        background: #0d1a2b;
+        color: #d8ebff;
+        border-radius: 12px;
+        padding: 16px;
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>VeriAI Coding Profile Analyzer</h1>
+      <p>Input usernames or profile links for GitHub, LeetCode, and Codeforces.</p>
+
+      <form id="analyzerForm" class="grid">
+        <div>
+          <label for="github">GitHub Username / Link</label>
+          <input id="github" placeholder="anshbhatt or https://github.com/anshbhatt" />
+        </div>
+
+        <div>
+          <label for="leetcode">LeetCode Username / Link</label>
+          <input id="leetcode" placeholder="anshbhatt or https://leetcode.com/u/anshbhatt/" />
+        </div>
+
+        <div>
+          <label for="codeforces">Codeforces Username / Link (Optional)</label>
+          <input id="codeforces" placeholder="tourist or https://codeforces.com/profile/tourist" />
+        </div>
+
+        <button id="analyzeBtn" type="submit">Analyze</button>
+      </form>
+
+      <div id="status" class="status"></div>
+
+      <pre id="result">{
+  "github": {},
+  "leetcode": {},
+  "codeforces": {},
+  "repo_analysis": [],
+  "leetcode_intelligence": {},
+  "codeforces_intelligence": {},
+  "inferred_strengths": [],
+  "coding_persona": "",
+  "consistency_score": 0,
+  "engineering_maturity_score": 0,
+  "repository_quality_average": 0,
+  "profile_confidence": 0,
+  "recruiter_summary": "",
+  "hiring_recommendation": "",
+  "scores": {},
+  "coding_level": ""
+}</pre>
+    </main>
+
+    <script>
+      const form = document.getElementById("analyzerForm");
+      const button = document.getElementById("analyzeBtn");
+      const statusNode = document.getElementById("status");
+      const resultNode = document.getElementById("result");
+
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+
+        const payload = {
+          github_username: document.getElementById("github").value.trim() || null,
+          leetcode_username: document.getElementById("leetcode").value.trim() || null,
+          codeforces_username: document.getElementById("codeforces").value.trim() || null,
+        };
+
+        if (!payload.github_username && !payload.leetcode_username && !payload.codeforces_username) {
+          statusNode.textContent = "Provide at least one profile.";
+          statusNode.className = "status error";
+          return;
+        }
+
+        statusNode.textContent = "Analyzing coding profiles...";
+        statusNode.className = "status";
+        button.disabled = true;
+
+        try {
+          const response = await fetch("/analyze-coding-profile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.detail || "Request failed.");
+          }
+
+          resultNode.textContent = JSON.stringify(data, null, 2);
+          statusNode.textContent = "Analysis complete.";
+          statusNode.className = "status";
+        } catch (error) {
+          statusNode.textContent = error.message;
+          statusNode.className = "status error";
+        } finally {
+          button.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
