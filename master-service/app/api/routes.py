@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -18,10 +19,13 @@ from app.services.downstream import (
     call_marksheet_analyzer,
     call_resume_analyzer,
 )
+from app.services.master_service import has_candidate_basic_details
 from app.services.payload_builder import build_master_report
+from app.services.cloudinary_service import upload_resume_to_cloudinary
 
 router = APIRouter()
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).resolve().parents[1] / "templates"))
+logger = logging.getLogger(__name__)
 
 MAX_RESUME_BYTES = 8 * 1024 * 1024
 ALLOWED_EXTENSIONS = {".pdf", ".docx"}
@@ -152,15 +156,13 @@ async def analyze_profile(
                 status_code=400,
                 detail="Resume and marksheet files cannot be the same file.",
             )
-        if not _looks_like_marksheet(marksheet_contents):
-            if _looks_like_resume(marksheet_contents):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Uploaded marksheet file looks like a resume. Please upload a valid marksheet PDF.",
-                )
+        # Marksheet PDFs often contain compressed/fragmented text, so strict text-sniffing can
+        # produce false negatives. Keep the strong resume-vs-marksheet guard, but allow ambiguous
+        # PDFs to proceed to the marksheet analyzer for final validation.
+        if not _looks_like_marksheet(marksheet_contents) and _looks_like_resume(marksheet_contents):
             raise HTTPException(
                 status_code=400,
-                detail="Uploaded marksheet file does not look like a valid marksheet PDF.",
+                detail="Uploaded marksheet file looks like a resume. Please upload a valid marksheet PDF.",
             )
         marksheet_filename = marksheet_file.filename or "marksheet.pdf"
         marksheet_content_type = marksheet_file.content_type
@@ -214,6 +216,16 @@ async def analyze_profile(
         return MarksheetOutcome(data=data, error=err, skipped=False)
 
     resume_out, coding_out, marksheet_out = await asyncio.gather(run_resume(), run_coding(), run_marksheet())
+    resume_url: str | None = None
+    if resume_out.data is not None:
+        try:
+            resume_url = await upload_resume_to_cloudinary(
+                settings=settings,
+                resume_bytes=contents,
+                filename=file.filename or "resume.bin",
+            )
+        except Exception:
+            logger.exception("Cloudinary upload failed for resume filename=%s", file.filename or "resume.bin")
 
     resume_ok = resume_out.data is not None
     if coding_out.skipped:
@@ -237,6 +249,12 @@ async def analyze_profile(
         marksheet_ok = marksheet_out.data is not None
         marksheet_data = marksheet_out.data
         marksheet_error = marksheet_out.error
+        if marksheet_ok and not has_candidate_basic_details(marksheet_data):
+            marksheet_ok = False
+            marksheet_data = None
+            marksheet_error = (
+                "Invalid marksheet: basic candidate details are missing (name, class, and roll/enrollment)."
+            )
 
     report = build_master_report(
         resume=resume_out.data,
@@ -247,6 +265,7 @@ async def analyze_profile(
         leetcode_username=lc,
         codeforces_username=cf,
         resume_filename=file.filename,
+        resume_url=resume_url,
         resume_ok=resume_ok,
         resume_error=resume_out.error,
         coding_ok=coding_ok,

@@ -1,4 +1,20 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: verifai-postgres
+    environment:
+      POSTGRES_DB: verifai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d verifai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   master-service:
     build:
       context: ./master-service
@@ -6,13 +22,22 @@ services:
     container_name: master-service
     ports:
       - "28082:8080"
+    env_file:
+      - ./master-service/.env
     environment:
       RESUME_ANALYZER_BASE_URL: http://resume-analyzer:8080
       CODING_ANALYZER_BASE_URL: http://coding-analyzer:8080
       MARKSHEET_ANALYZER_BASE_URL: http://marksheet-analyzer:8080
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/verifai
     depends_on:
-      - resume-analyzer
-      - coding-analyzer
+      postgres:
+        condition: service_healthy
+      resume-analyzer:
+        condition: service_started
+      coding-analyzer:
+        condition: service_started
+      marksheet-analyzer:
+        condition: service_started
     restart: unless-stopped
 
   coding-analyzer:
@@ -41,3 +66,6 @@ services:
     ports:
       - "28083:8080"
     restart: unless-stopped
+
+volumes:
+  postgres-data:

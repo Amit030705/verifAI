@@ -1,0 +1,205 @@
+from __future__ import annotations
+
+import asyncio
+import logging
+from typing import Any
+
+import httpx
+
+from app.config import get_settings
+from app.services.cloudinary_service import upload_resume_to_cloudinary
+from app.services.downstream import (
+    DEFAULT_HEADERS,
+    call_coding_analyzer,
+    call_marksheet_analyzer,
+    call_resume_analyzer,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def normalize_skills(skills: list[Any] | None) -> list[str]:
+    if not isinstance(skills, list):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in skills:
+        if not isinstance(raw, str):
+            continue
+        normalized = raw.strip().lower()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        out.append(normalized)
+    return out
+
+
+def _safe_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        clean = value.strip().replace(",", ".")
+        try:
+            return float(clean)
+        except ValueError:
+            return None
+    return None
+
+
+def _clamp_score(value: float | None) -> float:
+    if value is None:
+        return 0.0
+    return max(0.0, min(100.0, float(value)))
+
+
+def _academic_score(cgpa: float | None) -> float:
+    if cgpa is None:
+        return 0.0
+    return _clamp_score((cgpa / 10.0) * 100.0)
+
+
+def has_candidate_basic_details(marksheet: dict[str, Any] | None) -> bool:
+    if not isinstance(marksheet, dict):
+        return False
+    candidate = marksheet.get("candidate")
+    if not isinstance(candidate, dict):
+        return False
+
+    name = str(candidate.get("name") or "").strip()
+    roll_no = str(candidate.get("roll_no") or "").strip()
+    enrollment_no = str(candidate.get("enrollment_no") or "").strip()
+    class_name = str(candidate.get("class_name") or "").strip()
+
+    has_identity = bool(roll_no or enrollment_no)
+    return bool(name and class_name and has_identity)
+
+
+def normalize_master_output(
+    *,
+    resume: dict[str, Any],
+    coding: dict[str, Any],
+    marksheet: dict[str, Any],
+    github_username: str,
+    leetcode_username: str,
+    resume_url: str | None,
+) -> dict[str, Any]:
+    marksheet_cgpa = _safe_float(marksheet.get("cgpa_computed"))
+    resume_cgpa = _safe_float(resume.get("cgpa"))
+    final_cgpa = marksheet_cgpa if marksheet_cgpa is not None else resume_cgpa
+    coding_score = _clamp_score(_safe_float((coding.get("scores") or {}).get("overall_score")))
+    academic_score = _academic_score(final_cgpa)
+    if coding_score > 0 and academic_score > 0:
+        overall_score = round((coding_score * 0.6) + (academic_score * 0.4), 2)
+    else:
+        overall_score = max(coding_score, academic_score)
+
+    github_data = coding.get("github") if isinstance(coding.get("github"), dict) else {}
+    leetcode_data = coding.get("leetcode") if isinstance(coding.get("leetcode"), dict) else {}
+    coding_persona = str(coding.get("coding_persona") or coding.get("coding_level") or "").strip()
+    profile = {
+        "student": {
+            "name": str(resume.get("name") or marksheet.get("candidate", {}).get("name") or "").strip(),
+            "email": str(resume.get("email") or "").strip().lower(),
+            "phone": str(resume.get("phone") or "").strip(),
+            "branch": str(resume.get("branch") or "").strip(),
+            "cgpa": final_cgpa,
+            "cgpa_verified": marksheet_cgpa is not None,
+        },
+        "skills": normalize_skills(resume.get("skills")),
+        "coding": {
+            "persona": coding_persona,
+            "score": coding_score,
+            "github": {**github_data, "username": github_username},
+            "leetcode": {**leetcode_data, "username": leetcode_username},
+        },
+        "academics": {
+            "cgpa": final_cgpa,
+            "verified": marksheet_cgpa is not None,
+            "score": academic_score,
+        },
+        "overall_score": overall_score,
+        "resume_data": resume,
+        "academic_data": marksheet,
+        "github_data": github_data,
+        "leetcode_data": leetcode_data,
+        "resume_url": resume_url,
+    }
+    return profile
+
+
+async def analyze_student_profile(
+    *,
+    resume_file: bytes,
+    resume_filename: str,
+    resume_content_type: str | None,
+    marksheet_file: bytes,
+    marksheet_filename: str,
+    marksheet_content_type: str | None,
+    branch: str,
+    github: str,
+    leetcode: str,
+) -> dict[str, Any]:
+    settings = get_settings()
+    logger.info("Starting profile analysis for github=%s leetcode=%s", github, leetcode)
+
+    async with httpx.AsyncClient(headers=DEFAULT_HEADERS) as client:
+        resume_task = call_resume_analyzer(
+            settings=settings,
+            client=client,
+            file_bytes=resume_file,
+            filename=resume_filename,
+            content_type=resume_content_type,
+        )
+        coding_task = call_coding_analyzer(
+            settings=settings,
+            client=client,
+            payload={
+                "github_username": github,
+                "leetcode_username": leetcode,
+                "codeforces_username": None,
+            },
+        )
+        marksheet_task = call_marksheet_analyzer(
+            settings=settings,
+            client=client,
+            file_bytes=marksheet_file,
+            filename=marksheet_filename,
+            content_type=marksheet_content_type,
+        )
+
+        (resume_data, resume_error), (coding_data, coding_error), (marksheet_data, marksheet_error) = await asyncio.gather(
+            resume_task,
+            coding_task,
+            marksheet_task,
+        )
+
+    if resume_error or resume_data is None:
+        raise ValueError(f"Resume analyzer failed: {resume_error or 'unknown error'}")
+    if coding_error or coding_data is None:
+        raise ValueError(f"Coding analyzer failed: {coding_error or 'unknown error'}")
+    if marksheet_error or marksheet_data is None:
+        raise ValueError(f"Marksheet analyzer failed: {marksheet_error or 'unknown error'}")
+    if not has_candidate_basic_details(marksheet_data):
+        raise ValueError(
+            "Invalid marksheet: basic candidate details are missing (name, class, and roll/enrollment)."
+        )
+
+    resume_data["branch"] = branch.strip()
+    resume_url = await upload_resume_to_cloudinary(
+        settings=settings,
+        resume_bytes=resume_file,
+        filename=resume_filename,
+    )
+    normalized = normalize_master_output(
+        resume=resume_data,
+        coding=coding_data,
+        marksheet=marksheet_data,
+        github_username=github.strip(),
+        leetcode_username=leetcode.strip(),
+        resume_url=resume_url,
+    )
+    logger.info("Completed profile analysis for email=%s", normalized["student"]["email"])
+    return normalized
+

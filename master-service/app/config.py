@@ -14,6 +14,15 @@ class Settings(BaseSettings):
     resume_http_timeout_s: float = 120.0
     coding_http_timeout_s: float = 180.0
     marksheet_http_timeout_s: float = 120.0
+    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/verifai"
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
+    db_echo_sql: bool = False
+    log_level: str = "INFO"
+    cloudinary_cloud_name: str = ""
+    cloudinary_api_key: str = ""
+    cloudinary_api_secret: str = ""
+    cloudinary_resume_folder: str = "verifAI/resumes"
 
     @property
     def resume_base(self) -> str:

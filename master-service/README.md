@@ -12,6 +12,7 @@ docker compose -f docker-compose.dev.yml up -d
 - Coding analyzer: http://localhost:18080  
 - Resume analyzer: http://localhost:18081  
 - Marksheet analyzer: http://localhost:18083  
+- PostgreSQL: localhost:15432 (`verifai`, user `postgres`)
 
 ## Run locally (uvicorn)
 
@@ -104,3 +105,12 @@ Returns JSON with **`report_version`: 2**, **`generated_at`**, normalized **`stu
 | `RESUME_HTTP_TIMEOUT_S` | `120` |
 | `CODING_HTTP_TIMEOUT_S` | `180` |
 | `MARKSHEET_HTTP_TIMEOUT_S` | `120` |
+| `DATABASE_URL` | `postgresql+psycopg://postgres:postgres@postgres-dev:5432/verifai` |
+| `DB_POOL_SIZE` | `10` |
+| `DB_MAX_OVERFLOW` | `20` |
+| `DB_ECHO_SQL` | `false` |
+| `LOG_LEVEL` | `INFO` |
+| `CLOUDINARY_CLOUD_NAME` | `` |
+| `CLOUDINARY_API_KEY` | `` |
+| `CLOUDINARY_API_SECRET` | `` |
+| `CLOUDINARY_RESUME_FOLDER` | `verifAI/resumes` |

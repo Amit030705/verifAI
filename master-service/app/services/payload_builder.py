@@ -66,6 +66,7 @@ def build_master_report(
     codeforces_username: str | None,
     marksheet: dict[str, Any] | None,
     resume_filename: str | None,
+    resume_url: str | None,
     resume_ok: bool,
     resume_error: str | None,
     coding_ok: bool,
@@ -90,7 +91,7 @@ def build_master_report(
         roll_no="",
         enrollment_no="",
         class_name="",
-        resume_url=None,
+        resume_url=resume_url,
         resume_filename=resume_filename,
     )
     if marksheet_ok and marksheet:
