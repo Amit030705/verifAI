@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy import text
 
 from app.api.routes import router as analyzer_router
 from app.api.student import router as student_router
@@ -37,6 +38,18 @@ app.include_router(analyzer_router)
 app.include_router(student_router)
 
 
+def _apply_startup_schema_updates() -> None:
+    # Keep legacy deployments working when new auth columns are introduced.
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS roll_no VARCHAR(64)"))
+        conn.execute(text("ALTER TABLE students ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255) DEFAULT ''"))
+        conn.execute(text("UPDATE students SET password_hash = '' WHERE password_hash IS NULL"))
+        conn.execute(text("ALTER TABLE students ALTER COLUMN password_hash SET NOT NULL"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_students_roll_no_unique ON students (roll_no)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS ix_students_roll_no_lookup ON students (roll_no)"))
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    _apply_startup_schema_updates()

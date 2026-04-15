@@ -16,10 +16,13 @@ def utc_now() -> datetime:
 
 class Student(Base):
     __tablename__ = "students"
+    __table_args__ = (Index("ix_students_roll_no_lookup", "roll_no"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    roll_no: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     phone: Mapped[str] = mapped_column(String(32), nullable=False)
     branch: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     cgpa: Mapped[float | None] = mapped_column(Float, nullable=True)

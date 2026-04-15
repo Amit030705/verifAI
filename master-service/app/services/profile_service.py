@@ -9,27 +9,98 @@ from sqlalchemy.orm import Session
 from app.database.models import RawUpload, Student, StudentProfile
 from app.schemas.student import (
     AcademicsData,
+    AuthTokenResponse,
     CodingData,
+    LoginRequest,
+    RegisterRequest,
     StudentData,
     StudentProfileCreate,
     StudentProfileResponse,
     StudentProfileStoreResponse,
 )
+from app.services.auth_service import AuthService
 from app.services.master_service import normalize_skills
 
 logger = logging.getLogger(__name__)
 
 
 class ProfileService:
-    def __init__(self, db: Session) -> None:
+    def __init__(self, db: Session, auth_service: AuthService | None = None) -> None:
         self.db = db
+        self.auth_service = auth_service
 
-    def save_profile(self, payload: StudentProfileCreate) -> StudentProfileStoreResponse:
+    @staticmethod
+    def _looks_like_email(identifier: str) -> bool:
+        return "@" in identifier and "." in identifier.split("@")[-1]
+
+    def register_student(self, payload: RegisterRequest) -> Student:
+        duplicate = self.db.query(Student).filter(Student.email == payload.email).one_or_none()
+        if duplicate:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "Account already exists with this email.",
+                    "code": "duplicate_email",
+                    "student_id": duplicate.id,
+                },
+            )
+
+        if self.auth_service is None:
+            raise HTTPException(status_code=500, detail="Auth service unavailable.")
+
+        student = Student(
+            name=payload.email.split("@")[0],
+            email=payload.email,
+            roll_no=None,
+            password_hash=self.auth_service.hash_password(payload.password),
+            phone="PENDING",
+            branch="PENDING",
+            cgpa=None,
+            cgpa_verified=False,
+        )
+        self.db.add(student)
+        self.db.commit()
+        self.db.refresh(student)
+        return student
+
+    def login_student(self, payload: LoginRequest) -> AuthTokenResponse:
+        if self.auth_service is None:
+            raise HTTPException(status_code=500, detail="Auth service unavailable.")
+
+        identifier = payload.identifier.strip()
+        if self._looks_like_email(identifier):
+            student = self.db.query(Student).filter(Student.email == identifier.lower()).one_or_none()
+        else:
+            student = self.db.query(Student).filter(Student.roll_no == identifier.upper()).one_or_none()
+
+        if student is None or not self.auth_service.verify_password(payload.password, student.password_hash):
+            raise HTTPException(status_code=401, detail="Invalid credentials.")
+
+        token = self.auth_service.create_access_token(
+            student_id=student.id,
+            email=student.email,
+            roll_no=student.roll_no,
+        )
+        return AuthTokenResponse(
+            access_token=token,
+            student_id=student.id,
+            email=student.email,
+            roll_no=student.roll_no,
+        )
+
+    def save_profile(
+        self,
+        payload: StudentProfileCreate,
+        *,
+        requesting_student_id: int | None = None,
+    ) -> StudentProfileStoreResponse:
         student = self.db.query(Student).filter(Student.email == payload.student.email).one_or_none()
         if student is None:
             student = Student(
                 name=payload.student.name,
                 email=payload.student.email,
+                roll_no=payload.student.roll_no,
+                password_hash="",
                 phone=payload.student.phone,
                 branch=payload.student.branch,
                 cgpa=payload.student.cgpa,
@@ -38,14 +109,30 @@ class ProfileService:
             self.db.add(student)
             self.db.flush()
         else:
+            if student.password_hash and requesting_student_id != student.id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="This account is registered. Log in to update your profile.",
+                )
             student.name = payload.student.name
             student.phone = payload.student.phone
             student.branch = payload.student.branch
             student.cgpa = payload.student.cgpa
             student.cgpa_verified = payload.student.cgpa_verified
+            if payload.student.roll_no:
+                student.roll_no = payload.student.roll_no
 
         profile = self.db.query(StudentProfile).filter(StudentProfile.student_id == student.id).one_or_none()
         skills = normalize_skills(payload.skills)
+        resume_data = payload.resume_data or {}
+        academic_data = payload.academic_data or {}
+        if profile is not None:
+            existing_resume_name = (profile.resume_data or {}).get("file_name")
+            existing_academic_name = (profile.academic_data or {}).get("file_name")
+            if existing_resume_name and not resume_data.get("file_name"):
+                resume_data = {**resume_data, "file_name": existing_resume_name}
+            if existing_academic_name and not academic_data.get("file_name"):
+                academic_data = {**academic_data, "file_name": existing_academic_name}
         if profile is None:
             profile = StudentProfile(
                 student_id=student.id,
@@ -57,8 +144,8 @@ class ProfileService:
                 overall_score=payload.overall_score,
                 github_data=payload.github_data,
                 leetcode_data=payload.leetcode_data,
-                resume_data=payload.resume_data,
-                academic_data=payload.academic_data,
+                resume_data=resume_data,
+                academic_data=academic_data,
                 last_analyzed_at=datetime.now(UTC),
             )
             self.db.add(profile)
@@ -72,8 +159,8 @@ class ProfileService:
             profile.overall_score = payload.overall_score
             profile.github_data = payload.github_data
             profile.leetcode_data = payload.leetcode_data
-            profile.resume_data = payload.resume_data
-            profile.academic_data = payload.academic_data
+            profile.resume_data = resume_data
+            profile.academic_data = academic_data
             profile.last_analyzed_at = datetime.now(UTC)
 
         if payload.resume_url or payload.marksheet_url:
@@ -97,12 +184,20 @@ class ProfileService:
         if student is None:
             raise HTTPException(status_code=500, detail="Profile exists without student record.")
 
+        latest_upload = (
+            self.db.query(RawUpload)
+            .filter(RawUpload.student_id == student_id)
+            .order_by(RawUpload.uploaded_at.desc(), RawUpload.id.desc())
+            .one_or_none()
+        )
+
         return StudentProfileResponse(
             id=profile.id,
             student_id=student.id,
             student=StudentData(
                 name=student.name,
                 email=student.email,
+                roll_no=student.roll_no,
                 phone=student.phone,
                 branch=student.branch,
                 cgpa=student.cgpa,
@@ -121,6 +216,7 @@ class ProfileService:
                 score=profile.academic_score,
             ),
             overall_score=profile.overall_score,
+            resume_url=latest_upload.resume_url if latest_upload else None,
             resume_data=profile.resume_data or {},
             academic_data=profile.academic_data or {},
             github_data=profile.github_data or {},

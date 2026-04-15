@@ -7,10 +7,11 @@ services:
     ports:
       - "18084:3000"
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:18082
+      # Browser calls the API on the host-published port (not the Docker service name).
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:18082}
     depends_on:
       master-service-dev:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ./web:/app
       - /app/node_modules
@@ -42,6 +43,7 @@ services:
     container_name: master-service-dev
     ports:
       - "18082:8080"
+    # For /student/login and browser calls from web-dev: set AUTH_JWT_SECRET and (if needed) CORS_ALLOWED_ORIGINS in master-service/.env.
     env_file:
       - ./master-service/.env
     environment:
@@ -49,6 +51,18 @@ services:
       CODING_ANALYZER_BASE_URL: http://coding-analyzer-dev:8080
       MARKSHEET_ANALYZER_BASE_URL: http://marksheet-analyzer-dev:8080
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres-dev:5432/verifai
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 25s
     depends_on:
       postgres-dev:
         condition: service_healthy

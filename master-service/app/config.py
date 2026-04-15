@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     cloudinary_api_key: str = ""
     cloudinary_api_secret: str = ""
     cloudinary_resume_folder: str = "verifAI/resumes"
+    auth_jwt_secret: str = "change-me-master-service-jwt-secret"
+    auth_jwt_algorithm: str = "HS256"
+    auth_access_token_expire_minutes: int = 120
     cors_allowed_origins: str = (
         "http://localhost:3000,http://127.0.0.1:3000,"
         "http://localhost:18084,http://127.0.0.1:18084,"

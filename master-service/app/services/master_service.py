@@ -98,10 +98,13 @@ def normalize_master_output(
     github_data = coding.get("github") if isinstance(coding.get("github"), dict) else {}
     leetcode_data = coding.get("leetcode") if isinstance(coding.get("leetcode"), dict) else {}
     coding_persona = str(coding.get("coding_persona") or coding.get("coding_level") or "").strip()
+    cand = marksheet.get("candidate") if isinstance(marksheet.get("candidate"), dict) else {}
+    roll_from_sheet = str(cand.get("roll_no") or "").strip().upper()
     profile = {
         "student": {
-            "name": str(resume.get("name") or marksheet.get("candidate", {}).get("name") or "").strip(),
+            "name": str(resume.get("name") or cand.get("name") or "").strip(),
             "email": str(resume.get("email") or "").strip().lower(),
+            "roll_no": roll_from_sheet or None,
             "phone": str(resume.get("phone") or "").strip(),
             "branch": str(resume.get("branch") or "").strip(),
             "cgpa": final_cgpa,
@@ -203,3 +206,104 @@ async def analyze_student_profile(
     logger.info("Completed profile analysis for email=%s", normalized["student"]["email"])
     return normalized
 
+
+async def analyze_student_profile_incremental(
+    *,
+    existing_resume_data: dict[str, Any],
+    existing_marksheet_data: dict[str, Any],
+    existing_coding_data: dict[str, Any],
+    resume_file: bytes | None,
+    resume_filename: str | None,
+    resume_content_type: str | None,
+    marksheet_file: bytes | None,
+    marksheet_filename: str | None,
+    marksheet_content_type: str | None,
+    resume_changed: bool,
+    marksheet_changed: bool,
+    coding_changed: bool,
+    branch: str,
+    github: str,
+    leetcode: str,
+    existing_resume_url: str | None,
+) -> dict[str, Any]:
+    settings = get_settings()
+
+    resume_data = dict(existing_resume_data or {})
+    marksheet_data = dict(existing_marksheet_data or {})
+    coding_data = {
+        "github": dict((existing_coding_data or {}).get("github") or {}),
+        "leetcode": dict((existing_coding_data or {}).get("leetcode") or {}),
+        "scores": {"overall_score": (existing_coding_data or {}).get("score", 0)},
+        "coding_persona": (existing_coding_data or {}).get("persona", ""),
+    }
+    resume_url = existing_resume_url
+
+    async with httpx.AsyncClient(headers=DEFAULT_HEADERS) as client:
+        if resume_changed:
+            if not resume_file or not resume_filename:
+                raise ValueError("Resume file is required when resume_changed is true.")
+            r_data, r_err = await call_resume_analyzer(
+                settings=settings,
+                client=client,
+                file_bytes=resume_file,
+                filename=resume_filename,
+                content_type=resume_content_type,
+            )
+            if r_err or r_data is None:
+                raise ValueError(f"Resume analyzer failed: {r_err or 'unknown error'}")
+            r_data["branch"] = branch.strip()
+            resume_data = r_data
+            resume_url = await upload_resume_to_cloudinary(
+                settings=settings,
+                resume_bytes=resume_file,
+                filename=resume_filename,
+            )
+
+        if marksheet_changed:
+            if not marksheet_file or not marksheet_filename:
+                raise ValueError("Marksheet file is required when marksheet_changed is true.")
+            m_data, m_err = await call_marksheet_analyzer(
+                settings=settings,
+                client=client,
+                file_bytes=marksheet_file,
+                filename=marksheet_filename,
+                content_type=marksheet_content_type,
+            )
+            if m_err or m_data is None:
+                raise ValueError(f"Marksheet analyzer failed: {m_err or 'unknown error'}")
+            if not has_candidate_basic_details(m_data):
+                raise ValueError(
+                    "Invalid marksheet: basic candidate details are missing (name, class, and roll/enrollment)."
+                )
+            marksheet_data = m_data
+
+        if coding_changed:
+            c_data, c_err = await call_coding_analyzer(
+                settings=settings,
+                client=client,
+                payload={
+                    "github_username": github,
+                    "leetcode_username": leetcode,
+                    "codeforces_username": None,
+                },
+            )
+            if c_err or c_data is None:
+                raise ValueError(f"Coding analyzer failed: {c_err or 'unknown error'}")
+            coding_data = c_data
+
+    if not resume_data:
+        raise ValueError("No resume data available. Upload resume at least once.")
+    if not marksheet_data:
+        raise ValueError("No marksheet data available. Upload marksheet at least once.")
+
+    if "branch" not in resume_data or resume_changed:
+        resume_data["branch"] = branch.strip()
+
+    return normalize_master_output(
+        resume=resume_data,
+        coding=coding_data,
+        marksheet=marksheet_data,
+        github_username=github.strip(),
+        leetcode_username=leetcode.strip(),
+        resume_url=resume_url,
+    )
