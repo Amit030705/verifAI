@@ -1,4 +1,18 @@
 services:
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.prod
+    container_name: verifai-web
+    ports:
+      - "28084:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:28082
+    depends_on:
+      master-service:
+        condition: service_started
+    restart: unless-stopped
+
   postgres:
     image: postgres:16-alpine
     container_name: verifai-postgres

@@ -1,4 +1,22 @@
 services:
+  web-dev:
+    build:
+      context: ./web
+      dockerfile: Dockerfile.dev
+    container_name: web-dev
+    ports:
+      - "18084:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:18082
+    depends_on:
+      master-service-dev:
+        condition: service_started
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+      - /app/.next
+    restart: unless-stopped
+
   postgres-dev:
     image: postgres:16-alpine
     container_name: postgres-dev

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router as analyzer_router
@@ -18,6 +19,14 @@ app = FastAPI(
     title="VeriAI Master Service",
     version="1.0.0",
     description="Orchestrates resume and coding profile analyzers.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 static_dir = Path(__file__).resolve().parent / "static"

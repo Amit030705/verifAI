@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     cloudinary_api_key: str = ""
     cloudinary_api_secret: str = ""
     cloudinary_resume_folder: str = "verifAI/resumes"
+    cors_allowed_origins: str = (
+        "http://localhost:3000,http://127.0.0.1:3000,"
+        "http://localhost:18084,http://127.0.0.1:18084,"
+        "http://localhost:28084,http://127.0.0.1:28084"
+    )
 
     @property
     def resume_base(self) -> str:
@@ -35,6 +40,10 @@ class Settings(BaseSettings):
     @property
     def marksheet_base(self) -> str:
         return self.marksheet_analyzer_base_url.rstrip("/")
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
 
 
 @lru_cache

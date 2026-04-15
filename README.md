@@ -9,14 +9,15 @@ Microservices for resume parsing, coding-profile analysis, and a combined orches
 | [coding-analyzer](coding-analyzer/) | 18080 | GitHub / LeetCode / Codeforces analysis |
 | [resume-analyzer](resume-analyzer/) | 18081 | PDF/DOCX → structured resume JSON |
 | [master-service](master-service/) | 18082 | Parallel calls to both; single report + UI |
+| [web](web/) | 18084 | Next.js student dashboard (`/dashboard`) |
 
 ## Quick start (development)
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d
+docker compose -f docker-compose.dev.yml up -d --build
 ```
 
-Production-style ports: `docker-compose.prod.yml` (28xxx).
+Production-style ports: `docker-compose.prod.yml` (28xxx), including dashboard at `28084`.
 
 ## Future work
 
