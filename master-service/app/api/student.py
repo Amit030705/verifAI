@@ -116,7 +116,10 @@ async def analyze_student_incremental(
 
     profile = db.query(StudentProfile).filter(StudentProfile.student_id == student_id).one_or_none()
     if profile is None:
-        raise HTTPException(status_code=404, detail="Profile not found. Upload files and analyze first.")
+        raise HTTPException(
+            status_code=400,
+            detail="No existing profile found for incremental analysis. Run full analyze first with both files.",
+        )
 
     latest_upload = (
         db.query(RawUpload)
