@@ -109,5 +109,18 @@ services:
       - ./marksheet-analyzer:/app
     restart: unless-stopped
 
+  jd-analyzer-dev:
+    build:
+      context: ./jd-analyzer
+      dockerfile: Dockerfile.dev
+    container_name: jd-analyzer-dev
+    ports:
+      - "18085:8080"
+    env_file:
+      - ./jd-analyzer/.env
+    volumes:
+      - ./jd-analyzer:/app
+    restart: unless-stopped
+
 volumes:
   postgres-dev-data:

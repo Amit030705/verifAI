@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JD Analyzer</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #0b1220;
+        color: #e6edf7;
+      }
+      .container {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 32px 20px 64px;
+      }
+      .card {
+        background: #121c2e;
+        border: 1px solid #26344c;
+        border-radius: 16px;
+        padding: 20px;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+      }
+      p {
+        margin: 0 0 16px;
+        color: #a4b3cd;
+      }
+      textarea {
+        width: 100%;
+        min-height: 240px;
+        border: 1px solid #334565;
+        border-radius: 12px;
+        padding: 12px;
+        background: #0d1524;
+        color: #e6edf7;
+        resize: vertical;
+        box-sizing: border-box;
+      }
+      button {
+        margin-top: 12px;
+        border: 0;
+        border-radius: 10px;
+        padding: 10px 16px;
+        background: #4f8cff;
+        color: #fff;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .status {
+        margin-top: 12px;
+        min-height: 20px;
+        color: #ffd08a;
+      }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: #0d1524;
+        border: 1px solid #334565;
+        border-radius: 12px;
+        padding: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <section class="card">
+        <h1>JD Analyzer</h1>
+        <p>Paste combined text (JD + TPO constraints like girls-only/boys-only, CSE-related branches, no-backlog, unplaced-only, roll-no exceptions) and parse it into strict matching JSON.</p>
+        <textarea id="jdText" placeholder="Paste combined JD + TPO constraints here..."></textarea>
+        <div>
+          <button id="analyzeBtn" type="button">Analyze JD</button>
+        </div>
+        <div id="status" class="status"></div>
+      </section>
+
+      <section class="card" style="margin-top: 20px">
+        <h2 style="margin-top: 0">Output JSON</h2>
+        <pre id="output">{}</pre>
+      </section>
+    </main>
+
+    <script>
+      const analyzeBtn = document.getElementById("analyzeBtn");
+      const jdTextEl = document.getElementById("jdText");
+      const outputEl = document.getElementById("output");
+      const statusEl = document.getElementById("status");
+
+      async function analyzeJD() {
+        const jdText = jdTextEl.value.trim();
+        if (jdText.length < 20) {
+          statusEl.textContent = "Please provide at least 20 characters of JD text.";
+          return;
+        }
+
+        analyzeBtn.disabled = true;
+        statusEl.textContent = "Analyzing...";
+
+        try {
+          const response = await fetch("/analyze-jd", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ jd_text: jdText }),
+          });
+
+          const payload = await response.json();
+          if (!response.ok) {
+            const message =
+              (payload && payload.detail) || "Failed to analyze JD.";
+            throw new Error(message);
+          }
+
+          outputEl.textContent = JSON.stringify(payload, null, 2);
+          statusEl.textContent = "Success";
+        } catch (error) {
+          statusEl.textContent = error instanceof Error ? error.message : "Unexpected error occurred.";
+        } finally {
+          analyzeBtn.disabled = false;
+        }
+      }
+
+      analyzeBtn.addEventListener("click", analyzeJD);
+    </script>
+  </body>
+</html>

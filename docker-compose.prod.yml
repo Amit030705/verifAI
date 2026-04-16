@@ -95,5 +95,16 @@ services:
       - "28083:8080"
     restart: unless-stopped
 
+  jd-analyzer:
+    build:
+      context: ./jd-analyzer
+      dockerfile: Dockerfile.prod
+    container_name: jd-analyzer
+    ports:
+      - "28085:8080"
+    env_file:
+      - ./jd-analyzer/.env
+    restart: unless-stopped
+
 volumes:
   postgres-data:
