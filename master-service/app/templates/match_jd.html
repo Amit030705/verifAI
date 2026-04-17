@@ -136,7 +136,17 @@
       <legend>Job Description Input</legend>
       <div class="row">
         <label for="jd_text">JD text (include requirements and constraints)</label>
-        <textarea id="jd_text" name="jd_text" required placeholder="Paste full job description and TPO constraints..."></textarea>
+        <textarea id="jd_text" name="jd_text" placeholder="Paste full job description and TPO constraints..."></textarea>
+      </div>
+      <div class="row">
+        <label for="jd_file">JD file (optional, PDF/DOCX)</label>
+        <input
+          id="jd_file"
+          name="jd_file"
+          type="file"
+          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        />
+        <p class="muted" style="margin-top:0.35rem;">You can submit text only, file only, or both together.</p>
       </div>
       <div class="grid">
         <div class="row">
@@ -220,22 +230,31 @@
       loading.classList.add("active");
 
       const jdText = document.getElementById("jd_text").value.trim();
+      const jdFileInput = document.getElementById("jd_file");
+      const jdFile = jdFileInput && jdFileInput.files ? jdFileInput.files[0] : null;
       const studentIdsRaw = document.getElementById("student_ids").value.trim();
       const topKRaw = document.getElementById("top_k").value.trim();
 
-      const payload = { jd_text: jdText };
       const parsedIds = parseStudentIds(studentIdsRaw);
-      if (parsedIds.length > 0) payload.student_ids = parsedIds;
+      let parsedTopK = null;
       if (topKRaw) {
         const topK = Number.parseInt(topKRaw, 10);
-        if (Number.isFinite(topK) && topK > 0) payload.top_k = topK;
+        if (Number.isFinite(topK) && topK > 0) parsedTopK = topK;
       }
 
       try {
+        if (!jdText && !jdFile) {
+          throw new Error("Provide JD text or upload a JD PDF/DOCX file.");
+        }
+        const formData = new FormData();
+        if (jdText) formData.append("jd_text", jdText);
+        if (jdFile) formData.append("jd_file", jdFile);
+        if (parsedIds.length > 0) formData.append("student_ids", JSON.stringify(parsedIds));
+        if (parsedTopK) formData.append("top_k", String(parsedTopK));
+
         const res = await fetch("/student/match-jd", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: formData,
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
