@@ -247,3 +247,22 @@ export interface JDMatchResponseBody {
   filters: JDMatchFilters;
   candidates: JDMatchCandidate[];
 }
+
+// Search API Types
+export interface SearchResultCandidate {
+  candidate_id: number;
+  name: string;
+  email: string;
+  branch: string;
+  cgpa: number | null;
+  match_score: number;
+  overall_score: number;
+  matched_terms: string[];
+  match_quality: "exact" | "fuzzy" | "mixed";
+}
+
+export interface SearchResponse {
+  query: string;
+  total_results: number;
+  results: SearchResultCandidate[];
+}

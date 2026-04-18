@@ -8,6 +8,7 @@ import type {
   RegisterRequestBody,
   RegisterResponseBody,
   SaveProfileResponse,
+  SearchResponse,
   StudentProfileDetail,
   StudentProfilePayload,
 } from "@/lib/types";
@@ -116,5 +117,30 @@ export async function matchCandidatesWithJdMultipart(
   const { data } = await api.post<JDMatchResponseBody>("/student/match-jd", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
+  return data;
+}
+
+export async function searchCandidates(
+  query: string,
+  minScore: number = 0,
+  minCgpa: number | null = null,
+  branch: string | null = null,
+  limit: number = 50,
+): Promise<SearchResponse> {
+  const params = new URLSearchParams({
+    q: query,
+    min_score: minScore.toString(),
+    limit: limit.toString(),
+  });
+
+  if (minCgpa !== null) {
+    params.append("min_cgpa", minCgpa.toString());
+  }
+
+  if (branch) {
+    params.append("branch", branch);
+  }
+
+  const { data } = await api.get<SearchResponse>(`/search?${params.toString()}`);
   return data;
 }

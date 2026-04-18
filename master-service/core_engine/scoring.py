@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from core_engine.role_detector import detect_role_from_jd
+from core_engine.role_weights import calculate_weighted_final_score
 from core_engine.utils import (
     as_dict,
     choose_cgpa,
@@ -159,17 +161,34 @@ def calculate_candidate_score(
     leetcode_score, leetcode_breakdown = score_leetcode(leetcode_data, coding_data)
     academic_score, academic_breakdown = score_academics(academics, resume)
 
-    final_score = round_score(resume_score + github_score + leetcode_score + academic_score)
+    detected_role = detect_role_from_jd(jd)
+    dynamic_score = calculate_weighted_final_score(
+        {
+            "resume_score": resume_score,
+            "github_score": github_score,
+            "leetcode_score": leetcode_score,
+            "academic_score": academic_score,
+        },
+        detected_role,
+    )
+    final_score = dynamic_score["final_score"]
     return {
         "resume_score": resume_score,
         "github_score": github_score,
         "leetcode_score": leetcode_score,
         "academic_score": academic_score,
         "final_score": final_score,
+        "detected_role": detected_role,
+        "weights_used": dynamic_score["weights_used"],
         "breakdown": {
             "resume": resume_breakdown,
             "github": github_breakdown,
             "leetcode": leetcode_breakdown,
             "academics": academic_breakdown,
+            "dynamic_scoring": {
+                "component_percentages": dynamic_score["component_percentages"],
+                "weights_used": dynamic_score["weights_used"],
+                "detected_role": detected_role,
+            },
         },
     }

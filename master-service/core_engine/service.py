@@ -49,6 +49,8 @@ def score_existing_analysis(
         "leetcode_score": scores["leetcode_score"],
         "academic_score": scores["academic_score"],
         "final_score": scores["final_score"],
+        "detected_role": scores.get("detected_role", "generic"),
+        "weights_used": scores.get("weights_used"),
         "coding_score": coding_score,
         "academic_score_percent": academic_score,
         "breakdown": scores["breakdown"],

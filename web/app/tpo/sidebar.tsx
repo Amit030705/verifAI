@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Users, BarChart3, Settings } from "lucide-react";
+import { Home, Users, BarChart3, Settings, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { name: "Overview", href: "/tpo", icon: Home },
+  { name: "Search", href: "/tpo/search", icon: Search },
   { name: "Candidates", href: "/tpo/candidates", icon: Users },
   { name: "Reports", href: "/tpo/reports", icon: BarChart3 },
   { name: "Settings", href: "/tpo/settings", icon: Settings },

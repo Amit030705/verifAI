@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 from app.api.routes import router as analyzer_router
 from app.api.student import router as student_router
+from search_engine.routes import router as search_router
 from app.config import get_settings
 from app.database.database import Base, engine
 from app.logging_config import configure_logging
@@ -36,6 +37,7 @@ app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 app.include_router(analyzer_router)
 app.include_router(student_router)
+app.include_router(search_router)
 
 
 def _apply_startup_schema_updates() -> None:
