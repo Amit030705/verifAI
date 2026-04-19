@@ -1674,7 +1674,6 @@ def upsert_demo_students() -> None:
                 profile = StudentProfile(
                     student_id=student.id,
                     skills=entry["skills"],
-                    skills_json=entry["skills"],
                     coding_persona=entry["coding_persona"],
                     coding_score=entry["coding_score"],
                     academic_score=entry["academic_score"],
@@ -1688,7 +1687,6 @@ def upsert_demo_students() -> None:
                 db.add(profile)
             else:
                 profile.skills = entry["skills"]
-                profile.skills_json = entry["skills"]
                 profile.coding_persona = entry["coding_persona"]
                 profile.coding_score = entry["coding_score"]
                 profile.academic_score = entry["academic_score"]

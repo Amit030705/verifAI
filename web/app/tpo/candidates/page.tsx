@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { CheckCircle2, FileText, Loader2, Target, Trophy, UploadCloud, Users, X, Download } from "lucide-react";
 
-import { matchCandidatesWithJd, matchCandidatesWithJdMultipart } from "@/lib/api";
+import { matchCandidatesWithJd, matchCandidatesWithJdMultipart, getSearchCandidateDetails } from "@/lib/api";
 import type { JDMatchCandidate, JDMatchFilters, JDParsedConstraints } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -99,6 +99,61 @@ function toCandidate(raw: JDMatchCandidate): UICandidate {
       total: raw.score_breakdown.total,
     },
   };
+}
+
+function CandidateFullDetails({ candidateId }: { candidateId: number }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    getSearchCandidateDetails(candidateId)
+      .then((res) => {
+        if (mounted) {
+          setData(res);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [candidateId]);
+
+  if (loading) return <div className="text-sm text-slate-500 animate-pulse">Loading detailed profile...</div>;
+  if (!data) return <div className="text-sm text-slate-500">Failed to load detailed profile.</div>;
+
+  const hasGithub = data.github_data && Object.keys(data.github_data).length > 0;
+  const hasLeetcode = data.leetcode_data && Object.keys(data.leetcode_data).length > 0;
+
+  return (
+    <div className="col-span-3 pt-4 mt-4 border-t border-slate-200 grid grid-cols-2 gap-8">
+      {hasGithub && (
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold text-slate-900">GitHub Stats</h4>
+          <div className="text-sm text-slate-700">Followers: {data.github_data.followers || 0}</div>
+          <div className="text-sm text-slate-700">Public Repos: {data.github_data.public_repos || 0}</div>
+          {data.github_data.languages?.length > 0 && (
+            <div className="text-sm text-slate-700">Top Languages: {data.github_data.languages.slice(0, 3).join(", ")}</div>
+          )}
+        </div>
+      )}
+      {hasLeetcode && (
+        <div className="space-y-3">
+          <h4 className="text-sm font-semibold text-slate-900">LeetCode Stats</h4>
+          <div className="text-sm text-slate-700">Solved: {data.leetcode_data.totalSolved || 0} / {data.leetcode_data.totalQuestions || 0}</div>
+          <div className="text-sm text-slate-700">Easy: {data.leetcode_data.easySolved || 0}, Medium: {data.leetcode_data.mediumSolved || 0}, Hard: {data.leetcode_data.hardSolved || 0}</div>
+          <div className="text-sm text-slate-700">Rating: {Math.round(data.leetcode_data.rating || 0)}</div>
+        </div>
+      )}
+      {!hasGithub && !hasLeetcode && (
+        <div className="text-sm text-slate-500 col-span-2">No connected platforms (GitHub/LeetCode) found for this candidate.</div>
+      )}
+    </div>
+  );
 }
 
 export default function TpoDashboardPage() {
@@ -454,6 +509,7 @@ export default function TpoDashboardPage() {
                                         <div className="text-sm text-slate-400">No resume URL available</div>
                                       )}
                                     </div>
+                                    <CandidateFullDetails candidateId={c.id} />
                                   </div>
                                 </TableCell>
                               </TableRow>

@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { Loader2, Search, Zap, AlertCircle, X } from "lucide-react";
 
-import { searchCandidates, getApiErrorMessage } from "@/lib/api";
+import { searchCandidates, getApiErrorMessage, getSearchCandidateDetails } from "@/lib/api";
 import type { SearchResponse } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,12 +21,79 @@ function scoreBadge(score: number) {
   return { bg: "bg-rose-100", text: "text-rose-700", border: "border-rose-300" };
 }
 
+function CandidateFullDetails({ candidateId }: { candidateId: number }) {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    let mounted = true;
+    getSearchCandidateDetails(candidateId)
+      .then((res) => {
+        if (mounted) {
+          setData(res);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [candidateId]);
+
+  if (loading) return <div className="text-sm text-slate-500 animate-pulse px-6 py-4">Loading detailed profile...</div>;
+  if (!data) return <div className="text-sm text-slate-500 px-6 py-4">Failed to load detailed profile.</div>;
+
+  const hasGithub = data.github_data && Object.keys(data.github_data).length > 0;
+  const hasLeetcode = data.leetcode_data && Object.keys(data.leetcode_data).length > 0;
+
+  return (
+    <div className="px-10 py-6 bg-slate-50 border-t border-slate-200 grid grid-cols-2 gap-8">
+      <div className="space-y-3 col-span-2 md:col-span-1">
+        <h4 className="text-sm font-semibold text-slate-900">Candidate Details</h4>
+        <div className="text-sm text-slate-700">Email: {data.email}</div>
+        <div className="text-sm text-slate-700">Roll No: {data.roll_no || "N/A"}</div>
+        <div className="text-sm text-slate-700">Branch: {data.branch || "N/A"}</div>
+        <div className="text-sm text-slate-700">CGPA: {data.cgpa !== null ? data.cgpa : "N/A"}</div>
+        {data.resume_data?.resume_url && (
+          <div className="text-sm mt-2">
+            <a href={data.resume_data.resume_url} target="_blank" rel="noreferrer" className="text-blue-600 underline">View Resume</a>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-3 col-span-2 md:col-span-1">
+        {hasGithub && (
+          <div className="mb-4">
+            <h4 className="text-sm font-semibold text-slate-900">GitHub Stats</h4>
+            <div className="text-sm text-slate-700">Followers: {data.github_data.followers || 0}</div>
+            <div className="text-sm text-slate-700">Public Repos: {data.github_data.public_repos || 0}</div>
+            {data.github_data.languages?.length > 0 && (
+              <div className="text-sm text-slate-700">Top Languages: {data.github_data.languages.slice(0, 3).join(", ")}</div>
+            )}
+          </div>
+        )}
+        {hasLeetcode && (
+          <div>
+            <h4 className="text-sm font-semibold text-slate-900">LeetCode Stats</h4>
+            <div className="text-sm text-slate-700">Solved: {data.leetcode_data.totalSolved || 0}</div>
+            <div className="text-sm text-slate-700">Rating: {Math.round(data.leetcode_data.rating || 0)}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [expandedKey, setExpandedKey] = useState<number | null>(null);
 
   const handleSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim()) {
@@ -234,14 +301,15 @@ export default function SearchPage() {
                         const overallScoreBadge = scoreBadge(candidate.overall_score);
 
                         return (
-                          <motion.tr
-                            key={candidate.candidate_id}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: idx * 0.05 }}
-                            className="border-t border-slate-200 hover:bg-slate-50 transition"
-                          >
-                            <TableCell className="font-semibold text-slate-700 w-12">
+                          <React.Fragment key={candidate.candidate_id}>
+                            <motion.tr
+                              initial={{ opacity: 0, x: -10 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: idx * 0.05 }}
+                              className="border-t border-slate-200 hover:bg-slate-50 transition cursor-pointer"
+                              onClick={() => setExpandedKey(expandedKey === candidate.candidate_id ? null : candidate.candidate_id)}
+                            >
+                              <TableCell className="font-semibold text-slate-700 w-12">
                               <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-medium">
                                 {idx + 1}
                               </div>
@@ -288,8 +356,16 @@ export default function SearchPage() {
                               >
                                 {candidate.match_quality}
                               </Badge>
-                            </TableCell>
-                          </motion.tr>
+                              </TableCell>
+                            </motion.tr>
+                            {expandedKey === candidate.candidate_id && (
+                              <TableRow>
+                                <TableCell colSpan={6} className="p-0">
+                                  <CandidateFullDetails candidateId={candidate.candidate_id} />
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </React.Fragment>
                         );
                       })}
                     </TableBody>

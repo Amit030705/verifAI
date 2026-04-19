@@ -80,22 +80,27 @@ class ResultRanker:
         unique_query_matched = sum(1 for qt in query_tokens if any(qt.lower() in str(em) for em in exact_matches))
         score += unique_query_matched * 5
 
+        # Pre-process strings once to save CPU cycles
+        doc_name_lower = doc.name.lower()
+
         # Field-specific scoring
         for token in exact_matches:
-            # Check if in skills
-            if any(token.lower() in str(skill).lower() for skill in doc.skills):
+            token_lower = token.lower()
+            
+            # Check if in skills (skills are pre-lowered in indexer)
+            if any(token_lower in skill for skill in doc.skills):
                 score += self.skill_weight * 10
 
             # Check if in name
-            if token.lower() in doc.name.lower():
+            if token_lower in doc_name_lower:
                 score += self.name_weight * 10
 
-            # Check if in github languages
-            if any(token.lower() in str(lang).lower() for lang in doc.github_languages):
+            # Check if in github languages (pre-lowered)
+            if any(token_lower in lang for lang in doc.github_languages):
                 score += self.github_weight * 7
 
-            # Check if in projects
-            if any(token.lower() in str(proj).lower() for proj in doc.projects):
+            # Check if in projects (pre-lowered)
+            if any(token_lower in proj for proj in doc.projects):
                 score += self.project_weight * 6
 
         # Fuzzy match penalty (reduced weight)

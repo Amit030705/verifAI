@@ -140,7 +140,6 @@ class ProfileService:
             profile = StudentProfile(
                 student_id=student.id,
                 skills=skills,
-                skills_json=skills,
                 coding_persona=payload.coding.persona,
                 coding_score=payload.coding.score,
                 academic_score=payload.academics.score,
@@ -155,7 +154,6 @@ class ProfileService:
             self.db.flush()
         else:
             profile.skills = skills
-            profile.skills_json = skills
             profile.coding_persona = payload.coding.persona
             profile.coding_score = payload.coding.score
             profile.academic_score = payload.academics.score

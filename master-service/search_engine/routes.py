@@ -7,9 +7,10 @@ NEW routes - does not modify any existing routes or code.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from sqlalchemy.orm import Session
 
 from app.database.database import get_db
@@ -18,7 +19,17 @@ from search_engine.service import SearchQuery, SearchService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/search", tags=["search"])
+TPO_API_KEY = os.environ.get("TPO_API_KEY", "default-insecure-tpo-key")
+
+def verify_tpo_key(x_tpo_api_key: str = Header(None)):
+    if x_tpo_api_key != TPO_API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid or missing TPO API Key")
+
+router = APIRouter(
+    prefix="/search", 
+    tags=["search"],
+    dependencies=[Depends(verify_tpo_key)]
+)
 
 # Global search service instance
 _search_service: SearchService | None = None
@@ -38,8 +49,8 @@ def _ensure_indexed(service: SearchService, db: Session) -> None:
         return
 
     try:
-        # Query all students with their profiles
-        students = db.query(Student, StudentProfile).outerjoin(StudentProfile).all()
+        # Query all students with their profiles using a server-side cursor to prevent memory bloat
+        students = db.query(Student, StudentProfile).outerjoin(StudentProfile).yield_per(1000)
 
         candidates = []
         for student, profile in students:
@@ -187,11 +198,11 @@ async def get_candidate_details(
 
     GET /search/{candidate_id}/details
     """
-    student = db.query(Student).filter(Student.id == candidate_id).first()
-    if not student:
+    result = db.query(Student, StudentProfile).outerjoin(StudentProfile).filter(Student.id == candidate_id).first()
+    if not result:
         raise HTTPException(status_code=404, detail="Candidate not found")
-
-    profile = db.query(StudentProfile).filter(StudentProfile.student_id == candidate_id).first()
+        
+    student, profile = result
 
     data = {
         "id": student.id,

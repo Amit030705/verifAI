@@ -16,7 +16,6 @@ def utc_now() -> datetime:
 
 class Student(Base):
     __tablename__ = "students"
-    __table_args__ = (Index("ix_students_roll_no_lookup", "roll_no"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -55,8 +54,6 @@ class StudentProfile(Base):
     leetcode_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     resume_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     academic_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
-    # Optional JSON mirror helps portability when ARRAY consumers are limited.
-    skills_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     last_analyzed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     student: Mapped[Student] = relationship(back_populates="profile")
@@ -76,4 +73,8 @@ class RawUpload(Base):
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     student: Mapped[Student] = relationship(back_populates="raw_uploads")
+
+    __table_args__ = (
+        Index("ix_raw_uploads_student_uploaded", "student_id", "uploaded_at", "id"),
+    )
 

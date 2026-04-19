@@ -70,14 +70,15 @@ def run_jd_matching(
     query = db.query(Student).options(joinedload(Student.profile))
     if student_ids:
         query = query.filter(Student.id.in_(student_ids))
-    students = query.all()
-    summary.total_considered = len(students)
+    students_iter = query.yield_per(1000)
 
     allowed_branches = _normalize_text_set(constraints.allowed_branches)
     placement_exceptions = {r.strip().upper() for r in constraints.placement_exception_roll_nos}
 
     accepted: list[tuple[float, MatchCandidate]] = []
-    for student in students:
+    total_considered = 0
+    for student in students_iter:
+        total_considered += 1
         student_branch = (student.branch or "").strip().lower()
         student_gender = (student.gender or "").strip().lower()
         student_roll = (student.roll_no or "").strip().upper()
@@ -149,6 +150,7 @@ def run_jd_matching(
             )
         )
 
+    summary.total_considered = total_considered
     summary.passed_filters = len(accepted)
     accepted.sort(key=lambda item: (-item[0], item[1].student_id))
     candidates = [item[1] for item in accepted]

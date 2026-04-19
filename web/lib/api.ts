@@ -14,7 +14,10 @@ import type {
 } from "@/lib/types";
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8082";
+
+const TPO_API_KEY =
+  process.env.NEXT_PUBLIC_TPO_API_KEY || "default-insecure-tpo-key";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -141,6 +144,15 @@ export async function searchCandidates(
     params.append("branch", branch);
   }
 
-  const { data } = await api.get<SearchResponse>(`/search?${params.toString()}`);
+  const { data } = await api.get<SearchResponse>(`/search?${params.toString()}`, {
+    headers: { "x-tpo-api-key": TPO_API_KEY },
+  });
+  return data;
+}
+
+export async function getSearchCandidateDetails(candidateId: number): Promise<any> {
+  const { data } = await api.get(`/search/${candidateId}/details`, {
+    headers: { "x-tpo-api-key": TPO_API_KEY },
+  });
   return data;
 }
