@@ -54,6 +54,12 @@ def _apply_startup_schema_updates() -> None:
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_students_roll_no_lookup ON students (roll_no)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS ix_students_gender ON students (gender)"))
 
+        # Keep student_profiles compatible with newer schema that mirrors skills in JSON.
+        conn.execute(text("ALTER TABLE student_profiles ADD COLUMN IF NOT EXISTS skills_json JSON"))
+        conn.execute(text("UPDATE student_profiles SET skills_json = to_json(skills) WHERE skills_json IS NULL"))
+        conn.execute(text("ALTER TABLE student_profiles ALTER COLUMN skills_json SET DEFAULT '[]'::json"))
+        conn.execute(text("ALTER TABLE student_profiles ALTER COLUMN skills_json SET NOT NULL"))
+
 
 @app.on_event("startup")
 def on_startup() -> None:

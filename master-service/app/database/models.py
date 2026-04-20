@@ -54,6 +54,8 @@ class StudentProfile(Base):
     leetcode_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     resume_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     academic_data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    # JSON mirror of skills for compatibility with consumers that don't support ARRAY well.
+    skills_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     last_analyzed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
     student: Mapped[Student] = relationship(back_populates="profile")
