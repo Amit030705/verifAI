@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import text
 
 from app.database.database import SessionLocal
 from app.database.models import RawUpload, Student, StudentProfile
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+TESTMAIL_NAMESPACE = os.getenv("TESTMAIL_NAMESPACE")
 
 DEMO_STUDENTS: list[dict] = [
     {
@@ -1617,14 +1622,26 @@ def reset_demo_tables() -> None:
 
 
 def upsert_demo_students() -> None:
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     with SessionLocal() as db:
         for entry in DEMO_STUDENTS:
-            student = db.query(Student).filter(Student.email == entry["email"]).one_or_none()
+            # Format: name.demo@MY_NAMESPACE.testmail.app
+            name_slug = entry["name"].lower().replace(" ", ".")
+            namespace = TESTMAIL_NAMESPACE or "MY_NAMESPACE"
+            testmail_address = f"{name_slug}.demo@{namespace}.testmail.app"
+            
+            email_original = testmail_address
+            test_email = testmail_address
+            real_email = None # Stop using guessed gmail addresses
+
+            student = db.query(Student).filter(Student.email == email_original).one_or_none()
             if student is None:
                 student = Student(
                     name=entry["name"],
-                    email=entry["email"],
+                    email=email_original,
+                    test_email=test_email,
+                    real_email=real_email,
+                    preferred_email_type="test", # Default to test for seeded users
                     roll_no=entry["roll_no"],
                     password_hash="",
                     phone=entry["phone"],
@@ -1637,6 +1654,8 @@ def upsert_demo_students() -> None:
                 db.flush()
             else:
                 student.name = entry["name"]
+                student.test_email = test_email
+                student.real_email = real_email
                 student.roll_no = entry["roll_no"]
                 student.phone = entry["phone"]
                 student.branch = entry["branch"]

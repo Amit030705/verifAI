@@ -23,6 +23,7 @@ app = FastAPI(
     description="Orchestrates resume and coding profile analyzers.",
 )
 
+# CORS middleware MUST be added first to take precedence
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,

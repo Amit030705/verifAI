@@ -22,6 +22,9 @@ def normalize_gender_value(value: str) -> GenderType:
 class StudentData(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     email: str = Field(min_length=3, max_length=255)
+    test_email: str | None = Field(default=None, max_length=255)
+    real_email: str | None = Field(default=None, max_length=255)
+    preferred_email_type: str = Field(default="test", max_length=16)
     roll_no: str | None = Field(default=None, min_length=1, max_length=64)
     phone: str = Field(min_length=7, max_length=32)
     branch: str = Field(min_length=1, max_length=128)
@@ -253,6 +256,9 @@ class ScoreBreakdown(BaseModel):
 class MatchCandidate(BaseModel):
     student_id: int
     email: str
+    test_email: str | None = None
+    real_email: str | None = None
+    preferred_email_type: str = "test"
     name: str
     roll_no: str | None = None
     gender: str

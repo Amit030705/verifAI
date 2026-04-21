@@ -4,9 +4,9 @@ import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import { CheckCircle2, FileText, Loader2, Target, Trophy, UploadCloud, Users, X, Download } from "lucide-react";
+import { CheckCircle2, FileText, Loader2, Target, Trophy, UploadCloud, Users, X, Download, Mail } from "lucide-react";
 
-import { matchCandidatesWithJd, matchCandidatesWithJdMultipart, getSearchCandidateDetails } from "@/lib/api";
+import { matchCandidatesWithJd, matchCandidatesWithJdMultipart, getSearchCandidateDetails, sendCandidateEmail } from "@/lib/api";
 import type { JDMatchCandidate, JDMatchFilters, JDParsedConstraints } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const BRANCHES = ["CSE", "IT", "ECE", "EEE", "ME", "CE", "AIML", "DS", "Other"] as const;
 type BranchFilter = string;
@@ -42,6 +43,9 @@ type UICandidate = {
     academics: number;
     total: number;
   };
+  testEmail: string | null;
+  realEmail: string | null;
+  preferredType: string;
 };
 
 function scoreTone(score: number) {
@@ -98,6 +102,9 @@ function toCandidate(raw: JDMatchCandidate): UICandidate {
       academics: raw.score_breakdown.academics,
       total: raw.score_breakdown.total,
     },
+    testEmail: raw.test_email ?? null,
+    realEmail: raw.real_email ?? null,
+    preferredType: raw.preferred_email_type ?? "test",
   };
 }
 
@@ -123,7 +130,21 @@ function CandidateFullDetails({ candidateId }: { candidateId: number }) {
     };
   }, [candidateId]);
 
-  if (loading) return <div className="text-sm text-slate-500 animate-pulse">Loading detailed profile...</div>;
+  if (loading) return (
+    <div className="col-span-3 pt-4 mt-4 border-t border-slate-200 grid grid-cols-2 gap-8">
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-28" />
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-4 w-36" />
+        <Skeleton className="h-4 w-32" />
+      </div>
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-28" />
+        <Skeleton className="h-4 w-44" />
+        <Skeleton className="h-4 w-36" />
+      </div>
+    </div>
+  );
   if (!data) return <div className="text-sm text-slate-500">Failed to load detailed profile.</div>;
 
   const hasGithub = data.github_data && Object.keys(data.github_data).length > 0;
@@ -171,6 +192,25 @@ export default function TpoDashboardPage() {
   const [branch, setBranch] = useState<BranchFilter>("All");
   const [gender, setGender] = useState<GenderFilter>("All");
   const [skills, setSkills] = useState<string[]>([]);
+  const [sendingEmailId, setSendingEmailId] = useState<number | null>(null);
+
+  const handleSendEmail = async (candidate: UICandidate) => {
+    setSendingEmailId(candidate.id);
+    try {
+      const res = await sendCandidateEmail(candidate.id);
+      if (res.success) {
+        toast.success(res.message);
+      } else {
+        toast.error("Failed to send email");
+      }
+    } catch (err) {
+      toast.error("Error sending email");
+      console.error(err);
+    } finally {
+      setSendingEmailId(null);
+    }
+  };
+
   const [sortKey, setSortKey] = useState<"matchScore" | "cgpa" | "name" | "branch" | "gender">("matchScore");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -327,6 +367,12 @@ export default function TpoDashboardPage() {
     return out;
   }, [candidates, minCgpa, branch, gender, skills, sortKey, sortDir]);
 
+  const handleBulkEmail = () => {
+    toast.info(`Starting bulk send to ${filtered.length} candidates... (Demo script: scripts/gmail_bulk_sender.py)`);
+    // In a real app, this would call a backend API.
+  };
+
+
   const summary = useMemo(() => {
     const total = filtered.length;
     const qualified = filtered.filter((c) => !c.isPlaced && !c.hasBacklog).length;
@@ -416,6 +462,10 @@ export default function TpoDashboardPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button variant="default" size="sm" onClick={handleBulkEmail} className="h-9 rounded-full px-4 bg-blue-600 hover:bg-blue-700 text-white gap-2">
+                    <Mail className="size-4" />
+                    Bulk Email
+                  </Button>
                   <Button variant="outline" size="sm" onClick={exportToCsv} className="h-9 rounded-full px-4 border-slate-200 text-slate-600 hover:bg-slate-50 gap-2">
                     <Download className="size-4" />
                     Export CSV
@@ -455,10 +505,23 @@ export default function TpoDashboardPage() {
 
               <div className="overflow-x-auto">
                 <Table className="w-full">
-                  <TableHeader><TableRow className="border-slate-100 hover:bg-transparent"><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Candidate</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Branch</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">CGPA</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Match</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Gender</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Skills</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider w-24">Status</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow className="border-slate-100 hover:bg-transparent"><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Candidate</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Branch</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">CGPA</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Match</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Gender</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Skills</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider w-24">Status</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Actions</TableHead></TableRow></TableHeader>
                   <TableBody>
-                    {!filtered.length ? (
-                      <TableRow><TableCell colSpan={7} className="h-64 text-center text-slate-400">{errorMessage ?? "No candidates found matching the criteria."}</TableCell></TableRow>
+                    {loading ? (
+                      Array.from({ length: 5 }).map((_, i) => (
+                        <TableRow key={i} className="border-slate-50">
+                          <TableCell className="px-6 py-4"><Skeleton className="h-5 w-28" /></TableCell>
+                          <TableCell className="px-6 py-4"><Skeleton className="h-5 w-16" /></TableCell>
+                          <TableCell className="px-6 py-4 text-right"><Skeleton className="h-5 w-12 ml-auto" /></TableCell>
+                          <TableCell className="px-6 py-4 text-right"><Skeleton className="h-6 w-16 rounded-full ml-auto" /></TableCell>
+                          <TableCell className="px-6 py-4"><Skeleton className="h-5 w-14" /></TableCell>
+                          <TableCell className="px-6 py-4"><div className="flex gap-1.5"><Skeleton className="h-5 w-14 rounded-full" /><Skeleton className="h-5 w-14 rounded-full" /></div></TableCell>
+                          <TableCell className="px-6 py-4"><Skeleton className="h-5 w-5 rounded-full" /></TableCell>
+                          <TableCell className="px-6 py-4 text-right"><Skeleton className="h-8 w-8 rounded-full ml-auto" /></TableCell>
+                        </TableRow>
+                      ))
+                    ) : !filtered.length ? (
+                      <TableRow><TableCell colSpan={8} className="h-64 text-center text-slate-400">{errorMessage ?? "No candidates found matching the criteria."}</TableCell></TableRow>
                     ) : (
                       filtered.map((c) => {
                         const isTop = topKeys.has(c.key);
@@ -473,10 +536,24 @@ export default function TpoDashboardPage() {
                               <TableCell className="px-6 py-4 text-slate-600 capitalize">{c.gender}</TableCell>
                               <TableCell className="px-6 py-4"><div className="flex flex-wrap gap-1.5">{c.skills.slice(0, 3).map((s) => <span key={s} className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">{s}</span>)}{c.skills.length > 3 && <span className="inline-flex items-center rounded-full border border-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-500">+{c.skills.length - 3}</span>}</div></TableCell>
                               <TableCell className="px-6 py-4">{!c.hasBacklog && !c.isPlaced ? <CheckCircle2 className="size-5 text-emerald-500" /> : <span className="text-slate-300">—</span>}</TableCell>
+                              <TableCell className="px-6 py-4 text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSendEmail(c);
+                                  }}
+                                  disabled={sendingEmailId === c.id}
+                                >
+                                  {sendingEmailId === c.id ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+                                </Button>
+                              </TableCell>
                             </TableRow>
                             {expandedKey === c.key && (
                               <TableRow className="bg-slate-50/50 hover:bg-slate-50/50">
-                                <TableCell colSpan={7} className="p-0 border-b-0">
+                                <TableCell colSpan={8} className="p-0 border-b-0">
                                   <div className="px-10 py-6 grid grid-cols-3 gap-8">
                                     <div className="space-y-4">
                                       <h4 className="text-sm font-semibold text-slate-900">Score Breakdown</h4>

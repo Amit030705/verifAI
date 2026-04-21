@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -100,6 +100,9 @@ class ProfileService:
             student = Student(
                 name=payload.student.name,
                 email=payload.student.email,
+                test_email=payload.student.test_email,
+                real_email=payload.student.real_email,
+                preferred_email_type=payload.student.preferred_email_type,
                 roll_no=payload.student.roll_no,
                 password_hash="",
                 phone=payload.student.phone,
@@ -122,6 +125,12 @@ class ProfileService:
             student.cgpa = payload.student.cgpa
             student.gender = payload.student.gender
             student.cgpa_verified = payload.student.cgpa_verified
+            if payload.student.test_email:
+                student.test_email = payload.student.test_email
+            if payload.student.real_email:
+                student.real_email = payload.student.real_email
+            if payload.student.preferred_email_type:
+                student.preferred_email_type = payload.student.preferred_email_type
             if payload.student.roll_no:
                 student.roll_no = payload.student.roll_no
 
@@ -149,7 +158,7 @@ class ProfileService:
                 leetcode_data=payload.leetcode_data,
                 resume_data=resume_data,
                 academic_data=academic_data,
-                last_analyzed_at=datetime.now(UTC),
+                last_analyzed_at=datetime.now(timezone.utc),
             )
             self.db.add(profile)
             self.db.flush()
@@ -164,7 +173,7 @@ class ProfileService:
             profile.leetcode_data = payload.leetcode_data
             profile.resume_data = resume_data
             profile.academic_data = academic_data
-            profile.last_analyzed_at = datetime.now(UTC)
+            profile.last_analyzed_at = datetime.now(timezone.utc)
 
         if payload.resume_url or payload.marksheet_url:
             raw_upload = RawUpload(
@@ -200,6 +209,9 @@ class ProfileService:
             student=StudentData(
                 name=student.name,
                 email=student.email,
+                test_email=student.test_email,
+                real_email=student.real_email,
+                preferred_email_type=student.preferred_email_type,
                 roll_no=student.roll_no,
                 phone=student.phone,
                 branch=student.branch,

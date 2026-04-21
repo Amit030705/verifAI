@@ -156,3 +156,20 @@ export async function getSearchCandidateDetails(candidateId: number): Promise<an
   });
   return data;
 }
+
+export async function sendCandidateEmail(
+  candidateId: number,
+  subject?: string,
+  body?: string
+): Promise<{ success: boolean; message: string }> {
+  const formData = new FormData();
+  if (subject) formData.append("subject", subject);
+  if (body) formData.append("body", body);
+
+  const { data } = await api.post<{ success: boolean; message: string }>(
+    `/student/${candidateId}/send-email`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  return data;
+}

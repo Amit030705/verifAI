@@ -51,6 +51,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const BRANCHES: BranchOption[] = [
   "CSE",
@@ -488,6 +489,7 @@ export default function DashboardPage() {
           phone: resolvedPhone,
           branch: resolvedBranch,
           cgpa: Number.isNaN(cgpaValue) ? null : cgpaValue,
+          gender: effectiveAnalysis.student.gender ?? "other",
           cgpa_verified: effectiveAnalysis.academics.verified,
         },
         skills: effectiveAnalysis.skills,
@@ -711,7 +713,58 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {analysisResult ? (
+        {analyzing ? (
+          <section className="space-y-4">
+            <h2 className="text-xl font-semibold tracking-tight">Analysis Result</h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <Skeleton className="h-5 w-16" />
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-6 w-20 rounded-full" />
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <Skeleton className="h-5 w-16" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Skeleton className="h-6 w-32" />
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-4 w-20" />
+                    <Skeleton className="h-4 w-28" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <Skeleton className="h-5 w-24" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-6 w-32" />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <Skeleton className="h-5 w-28" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-8 w-20" />
+                  <Skeleton className="h-2 w-full" />
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+        ) : analysisResult ? (
           <section className="space-y-4">
             <h2 className="text-xl font-semibold tracking-tight">Analysis Result</h2>
             <div className="grid gap-4 md:grid-cols-2">

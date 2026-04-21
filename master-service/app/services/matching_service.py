@@ -149,6 +149,9 @@ def run_jd_matching(
                 MatchCandidate(
                     student_id=student.id,
                     email=student.email,
+                    test_email=student.test_email,
+                    real_email=student.real_email,
+                    preferred_email_type=student.preferred_email_type,
                     name=student.name,
                     roll_no=student.roll_no,
                     gender=student.gender,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
@@ -11,7 +11,7 @@ from app.database.database import Base
 
 
 def utc_now() -> datetime:
-    return datetime.now(UTC)
+    return datetime.now(timezone.utc)
 
 
 class Student(Base):
@@ -20,6 +20,9 @@ class Student(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    test_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    real_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    preferred_email_type: Mapped[str] = mapped_column(String(16), nullable=False, default="test") # 'real' or 'test'
     roll_no: Mapped[str | None] = mapped_column(String(64), nullable=True, unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     phone: Mapped[str] = mapped_column(String(32), nullable=False)

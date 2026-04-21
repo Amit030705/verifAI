@@ -348,3 +348,25 @@ async def match_students_with_jd(request: Request, db: Session = Depends(get_db)
         top_k=top_k,
     )
     return JDMatchResponse(jd=constraints, filters=filters, candidates=candidates)
+
+
+@router.post("/{id}/send-email")
+def send_student_email(
+    id: int,
+    subject: str | None = Form(None),
+    body: str | None = Form(None),
+    db: Session = Depends(get_db)
+) -> dict:
+    student = db.query(Student).filter(Student.id == id).one_or_none()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found.")
+    
+    from app.services.email_service import EmailService
+    service = EmailService()
+    success = service.send_single_email(student, subject, body)
+    
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to send email.")
+    
+    recipient_info = "(Test Inbox)" if student.preferred_email_type == "test" else ""
+    return {"success": True, "message": f"Mail sent to {student.name} {recipient_info}".strip()}

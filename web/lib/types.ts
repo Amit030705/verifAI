@@ -13,6 +13,9 @@ export interface AnalyzeResponse {
   student: {
     name: string;
     email: string;
+    test_email?: string | null;
+    real_email?: string | null;
+    preferred_email_type?: string;
     roll_no?: string | null;
     phone: string;
     branch: string;
@@ -110,6 +113,9 @@ export interface StudentProfileDetail {
   student: {
     name: string;
     email: string;
+    test_email?: string | null;
+    real_email?: string | null;
+    preferred_email_type?: string;
     roll_no: string | null;
     phone: string;
     branch: string;
@@ -192,6 +198,9 @@ export interface JDMatchScoreBreakdown {
 export interface JDMatchCandidate {
   student_id: number;
   email: string;
+  test_email?: string | null;
+  real_email?: string | null;
+  preferred_email_type?: string;
   name: string;
   roll_no: string | null;
   gender: "women" | "men" | "other";
@@ -253,6 +262,9 @@ export interface SearchResultCandidate {
   candidate_id: number;
   name: string;
   email: string;
+  test_email?: string | null;
+  real_email?: string | null;
+  preferred_email_type?: string;
   branch: string;
   cgpa: number | null;
   match_score: number;

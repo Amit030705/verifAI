@@ -4,9 +4,9 @@ import * as React from "react";
 import { useCallback, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { Loader2, Search, Zap, AlertCircle, X } from "lucide-react";
+import { Loader2, Search, Zap, AlertCircle, X, Mail } from "lucide-react";
 
-import { searchCandidates, getApiErrorMessage, getSearchCandidateDetails } from "@/lib/api";
+import { searchCandidates, getApiErrorMessage, getSearchCandidateDetails, sendCandidateEmail } from "@/lib/api";
 import type { SearchResponse } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 
 function scoreBadge(score: number) {
   if (score >= 80) return { bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-300" };
@@ -43,7 +44,22 @@ function CandidateFullDetails({ candidateId }: { candidateId: number }) {
     };
   }, [candidateId]);
 
-  if (loading) return <div className="text-sm text-slate-500 animate-pulse px-6 py-4">Loading detailed profile...</div>;
+  if (loading) return (
+    <div className="px-10 py-6 bg-slate-50 border-t border-slate-200 grid grid-cols-2 gap-8">
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-44" />
+        <Skeleton className="h-4 w-36" />
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-4 w-28" />
+      </div>
+      <div className="space-y-3">
+        <Skeleton className="h-4 w-28" />
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="h-4 w-36" />
+      </div>
+    </div>
+  );
   if (!data) return <div className="text-sm text-slate-500 px-6 py-4">Failed to load detailed profile.</div>;
 
   const hasGithub = data.github_data && Object.keys(data.github_data).length > 0;
@@ -94,6 +110,25 @@ export default function SearchPage() {
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [expandedKey, setExpandedKey] = useState<number | null>(null);
+  const [sendingEmailId, setSendingEmailId] = useState<number | null>(null);
+
+  const handleSendEmail = async (candidateId: number) => {
+    setSendingEmailId(candidateId);
+    try {
+      const res = await sendCandidateEmail(candidateId);
+      if (res.success) {
+        toast.success(res.message);
+      } else {
+        toast.error("Failed to send email");
+      }
+    } catch (err) {
+      toast.error("Error sending email");
+      console.error(err);
+    } finally {
+      setSendingEmailId(null);
+    }
+  };
+
 
   const handleSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim()) {
@@ -245,6 +280,48 @@ export default function SearchPage() {
         )}
       </AnimatePresence>
 
+      {/* Skeleton Loading State */}
+      {isLoading && (
+        <Card className="border-2 border-slate-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50 hover:bg-slate-50">
+                  <TableHead className="font-semibold text-slate-700">Rank</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Name</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Match Score</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Overall Score</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Matched Terms</TableHead>
+                  <TableHead className="font-semibold text-slate-700">Quality</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <TableRow key={i} className="border-t border-slate-200">
+                    <TableCell><Skeleton className="h-8 w-8 rounded-full" /></TableCell>
+                    <TableCell>
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-44" />
+                      </div>
+                    </TableCell>
+                    <TableCell><Skeleton className="h-6 w-14 rounded-full" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-14 rounded-full" /></TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Skeleton className="h-5 w-14 rounded-full" />
+                        <Skeleton className="h-5 w-14 rounded-full" />
+                      </div>
+                    </TableCell>
+                    <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      )}
+
       {/* Results */}
       <AnimatePresence>
         {hasSearched && results && (
@@ -293,6 +370,7 @@ export default function SearchPage() {
                         <TableHead className="font-semibold text-slate-700">Overall Score</TableHead>
                         <TableHead className="font-semibold text-slate-700">Matched Terms</TableHead>
                         <TableHead className="font-semibold text-slate-700">Quality</TableHead>
+                        <TableHead className="font-semibold text-slate-700 text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -357,10 +435,24 @@ export default function SearchPage() {
                                 {candidate.match_quality}
                               </Badge>
                               </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSendEmail(candidate.candidate_id);
+                                  }}
+                                  disabled={sendingEmailId === candidate.candidate_id}
+                                >
+                                  {sendingEmailId === candidate.candidate_id ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+                                </Button>
+                              </TableCell>
                             </motion.tr>
                             {expandedKey === candidate.candidate_id && (
                               <TableRow>
-                                <TableCell colSpan={6} className="p-0">
+                                <TableCell colSpan={7} className="p-0">
                                   <CandidateFullDetails candidateId={candidate.candidate_id} />
                                 </TableCell>
                               </TableRow>
