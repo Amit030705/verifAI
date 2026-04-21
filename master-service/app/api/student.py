@@ -6,6 +6,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
@@ -29,6 +30,8 @@ from app.schemas.student import (
     TpoGroupCreateRequest,
     TpoGroupMemberInfo,
     TpoGroupResponse,
+    TpoOverviewRecentPlacement,
+    TpoOverviewResponse,
     TpoMailActionRequest,
     TpoMailActionResponse,
     TpoLoginRequest,
@@ -463,6 +466,62 @@ def list_tpo_groups(
             )
         )
     return responses
+
+
+@router.get("/tpo/overview", response_model=TpoOverviewResponse)
+def get_tpo_overview(
+    db: Session = Depends(get_db),
+    _tpo_user: str = Depends(get_current_tpo_user),
+) -> TpoOverviewResponse:
+    total_students = db.query(func.count(Student.id)).scalar() or 0
+    active_groups = db.query(func.count(TpoAnalysisGroup.id)).scalar() or 0
+
+    placed_students = (
+        db.query(func.count(func.distinct(PlacementRecord.student_id)))
+        .filter(PlacementRecord.is_active.is_(True))
+        .scalar()
+        or 0
+    )
+
+    unplaced_eligible_students = (
+        db.query(func.count(Student.id))
+        .outerjoin(
+            PlacementRecord,
+            (PlacementRecord.student_id == Student.id) & (PlacementRecord.is_active.is_(True)),
+        )
+        .filter(PlacementRecord.id.is_(None), Student.has_active_backlog.is_(False))
+        .scalar()
+        or 0
+    )
+
+    recent_rows = (
+        db.query(PlacementRecord, Student)
+        .join(Student, Student.id == PlacementRecord.student_id)
+        .filter(PlacementRecord.is_active.is_(True))
+        .order_by(PlacementRecord.updated_at.desc(), PlacementRecord.id.desc())
+        .limit(5)
+        .all()
+    )
+    recent_placements = [
+        TpoOverviewRecentPlacement(
+            student_id=student.id,
+            name=student.name,
+            email=student.email,
+            company_name=record.company_name,
+            offer_type=record.offer_type,
+            pay_amount=record.pay_amount,
+            updated_at=record.updated_at,
+        )
+        for record, student in recent_rows
+    ]
+
+    return TpoOverviewResponse(
+        total_students=total_students,
+        unplaced_eligible_students=unplaced_eligible_students,
+        active_groups=active_groups,
+        placed_students=placed_students,
+        recent_placements=recent_placements,
+    )
 
 
 @router.delete("/tpo/groups/{group_id}", response_model=TpoMailActionResponse)

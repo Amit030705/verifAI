@@ -267,8 +267,10 @@
         filterStats.innerHTML = "";
         const filters = data.filters || {};
         const labels = [
+          ["Requested", filters.requested_target_count ?? "—"],
           ["Total", filters.total_considered ?? 0],
-          ["Passed", filters.passed_filters ?? 0],
+          ["Eligible", filters.eligible_count ?? filters.passed_filters ?? 0],
+          ["Returned", filters.returned_count ?? 0],
           ["Min CGPA", filters.rejected_min_cgpa ?? 0],
           ["Branch", filters.rejected_branch ?? 0],
           ["Gender", filters.rejected_gender ?? 0],

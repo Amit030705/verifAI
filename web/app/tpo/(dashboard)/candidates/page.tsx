@@ -4,12 +4,13 @@ import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
-import { CheckCircle2, FileText, Loader2, Target, Trophy, UploadCloud, Users, X, Download } from "lucide-react";
+import { CheckCircle2, FileText, Loader2, Search, Target, Trophy, UploadCloud, Users, X, Download, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 
 import {
   createTpoGroup,
+  getApiErrorMessage,
   getSearchCandidateDetails,
   listTpoGroups,
   markStudentPlacement,
@@ -22,6 +23,7 @@ import type {
   JDMatchCandidate,
   JDMatchFilters,
   JDParsedConstraints,
+  SearchResponse,
   SearchResultCandidate,
   TpoGroup,
 } from "@/lib/types";
@@ -205,10 +207,12 @@ export default function TpoDashboardPage() {
   const [placingStudentId, setPlacingStudentId] = useState<number | null>(null);
   const [lastCreatedGroupId, setLastCreatedGroupId] = useState<number | null>(null);
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
-  const [manualSearchQuery, setManualSearchQuery] = useState("");
-  const [manualSearchLoading, setManualSearchLoading] = useState(false);
-  const [manualResults, setManualResults] = useState<SearchResultCandidate[]>([]);
   const [manualSelected, setManualSelected] = useState<Record<number, SearchResultCandidate>>({});
+  const [query, setQuery] = useState("");
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchResponse | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const COMPACT_HEIGHT = 48;
   const EXPANDED_MIN_HEIGHT = 200;
@@ -412,8 +416,9 @@ export default function TpoDashboardPage() {
       setLastCreatedGroupId(created.id);
       setGroupTitle("");
       setManualSelected({});
-      setManualResults([]);
-      setManualSearchQuery("");
+      setQuery("");
+      setSearchResults(null);
+      setHasSearched(false);
       toast.success("Analysis group created.");
       return true;
     } catch (error) {
@@ -456,24 +461,6 @@ export default function TpoDashboardPage() {
     }
   }
 
-  async function handleManualSearch() {
-    const query = manualSearchQuery.trim();
-    if (!query) {
-      setManualResults([]);
-      return;
-    }
-    setManualSearchLoading(true);
-    try {
-      const response = await searchCandidates(query, 0, null, null, 15);
-      setManualResults(response.results);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to search students.";
-      toast.error(message);
-    } finally {
-      setManualSearchLoading(false);
-    }
-  }
-
   function addManualCandidate(candidate: SearchResultCandidate) {
     setManualSelected((prev) => ({ ...prev, [candidate.candidate_id]: candidate }));
   }
@@ -485,6 +472,64 @@ export default function TpoDashboardPage() {
       return next;
     });
   }
+
+  const handleSearch = React.useCallback(
+    async (searchQuery: string) => {
+      if (!searchQuery.trim()) {
+        setSearchResults(null);
+        setSearchError(null);
+        setHasSearched(false);
+        return;
+      }
+      setIsSearchLoading(true);
+      setSearchError(null);
+      try {
+        const response = await searchCandidates(searchQuery.trim(), 0, null, null, 50);
+        setSearchResults(response);
+        setHasSearched(true);
+      } catch (err) {
+        if (axios.isAxiosError(err) && [401, 403].includes(err.response?.status ?? 0)) {
+          clearTpoAuth();
+          router.replace("/tpo/login");
+          return;
+        }
+        setSearchError(getApiErrorMessage(err));
+      } finally {
+        setIsSearchLoading(false);
+      }
+    },
+    [router],
+  );
+
+  const debouncedSearch = useMemo(() => {
+    let timeoutId: NodeJS.Timeout;
+    return (searchQuery: string) => {
+      clearTimeout(timeoutId);
+      if (!searchQuery.trim()) {
+        setSearchResults(null);
+        setHasSearched(false);
+        return;
+      }
+      timeoutId = setTimeout(() => {
+        void handleSearch(searchQuery);
+      }, 500);
+    };
+  }, [handleSearch]);
+
+  function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    setQuery(value);
+    debouncedSearch(value);
+  }
+
+  function clearQuery() {
+    setQuery("");
+    setSearchResults(null);
+    setSearchError(null);
+    setHasSearched(false);
+  }
+
+  const showSearchDropdown = query.trim().length > 0 && (isSearchLoading || hasSearched || Boolean(searchError));
 
   useEffect(() => {
     if (isInputExpanded) jdTextareaRef.current?.focus();
@@ -524,39 +569,69 @@ export default function TpoDashboardPage() {
                     Open Placement Groups
                   </Button>
                 </div>
-                <div className="mt-3 rounded-md border bg-white p-3">
-                  <p className="text-sm font-medium text-slate-800">Manual Add Students (search_engine)</p>
-                  <div className="mt-2 flex gap-2">
-                    <Input
-                      value={manualSearchQuery}
-                      onChange={(e) => setManualSearchQuery(e.target.value)}
-                      placeholder="Search by name, email, skill..."
-                      className="max-w-md"
-                    />
-                    <Button variant="outline" onClick={() => void handleManualSearch()} disabled={manualSearchLoading}>
-                      {manualSearchLoading ? "Searching..." : "Search"}
+                <div className="mt-3 rounded-md border bg-white p-3 relative z-10">
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <Input
+                        placeholder="Search candidates by skill/name/tech..."
+                        value={query}
+                        onChange={handleQueryChange}
+                        className="pl-9 h-9 rounded-full text-sm bg-slate-50 border-slate-200 hover:bg-slate-100 focus:bg-white"
+                      />
+                      {query ? (
+                        <button onClick={clearQuery} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                          <X className="w-4 h-4" />
+                        </button>
+                      ) : null}
+                    </div>
+                    <Button
+                      onClick={() => void handleSearch(query)}
+                      disabled={isSearchLoading || !query.trim()}
+                      size="sm"
+                      className="h-9 rounded-full px-5 bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                    >
+                      {isSearchLoading ? <><Loader2 className="w-4 h-4 animate-spin" />Searching...</> : <><Zap className="w-4 h-4" />Search</>}
                     </Button>
                   </div>
-                  {manualResults.length > 0 ? (
-                    <div className="mt-2 space-y-1">
-                      {manualResults.map((candidate) => (
-                        <div
-                          key={candidate.candidate_id}
-                          className="flex items-center justify-between rounded border px-2 py-1 text-sm"
-                        >
-                          <span>
-                            {candidate.name} · {candidate.email} · {candidate.branch}
-                          </span>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => addManualCandidate(candidate)}
-                            disabled={Boolean(manualSelected[candidate.candidate_id])}
-                          >
-                            {manualSelected[candidate.candidate_id] ? "Added" : "Add"}
-                          </Button>
-                        </div>
-                      ))}
+                  {showSearchDropdown ? (
+                    <div className="absolute left-3 right-3 top-[calc(100%+8px)] z-20 rounded-xl border border-slate-200 bg-white shadow-sm max-h-72 overflow-y-auto">
+                      {isSearchLoading ? (
+                        <div className="px-3 py-3 text-sm text-slate-500">Searching candidates...</div>
+                      ) : searchError ? (
+                        <div className="px-3 py-3 text-sm text-rose-600">{searchError}</div>
+                      ) : (searchResults?.results?.length ?? 0) === 0 ? (
+                        <div className="px-3 py-3 text-sm text-slate-500">No candidates found.</div>
+                      ) : (
+                        searchResults!.results.slice(0, 12).map((candidate) => (
+                          <div key={candidate.candidate_id} className="flex items-center justify-between gap-3 px-3 py-2 border-b border-slate-100 last:border-b-0">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-slate-900 truncate">{candidate.name}</p>
+                              <p className="text-xs text-slate-500 truncate">{candidate.email} · {candidate.branch} · {candidate.match_quality}</p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() =>
+                                addManualCandidate({
+                                  candidate_id: candidate.candidate_id,
+                                  name: candidate.name,
+                                  email: candidate.email,
+                                  branch: candidate.branch,
+                                  match_score: candidate.match_score,
+                                  overall_score: candidate.overall_score,
+                                  match_quality: candidate.match_quality,
+                                  matched_terms: candidate.matched_terms,
+                                } as SearchResultCandidate)
+                              }
+                              disabled={Boolean(manualSelected[candidate.candidate_id])}
+                              className="h-8 rounded-full px-3"
+                            >
+                              {manualSelected[candidate.candidate_id] ? "Added" : "Add"}
+                            </Button>
+                          </div>
+                        ))
+                      )}
                     </div>
                   ) : null}
                   {Object.keys(manualSelected).length > 0 ? (
@@ -572,22 +647,18 @@ export default function TpoDashboardPage() {
                     </div>
                   ) : null}
                 </div>
-                <p className="mt-2 text-xs text-slate-600">
-                  Group management moved to <span className="font-medium">Placement Groups</span>.
-                  {lastCreatedGroupId ? (
-                    <>
-                      {" "}
-                      Latest group created:{" "}
-                      <button
-                        className="underline font-medium"
-                        onClick={() => router.push(`/tpo/placement-groups/${lastCreatedGroupId}`)}
-                      >
-                        View group #{lastCreatedGroupId}
-                      </button>
-                      .
-                    </>
-                  ) : null}
-                </p>
+                {lastCreatedGroupId ? (
+                  <p className="mt-2 text-xs text-slate-600">
+                    Latest group created:{" "}
+                    <button
+                      className="underline font-medium"
+                      onClick={() => router.push(`/tpo/placement-groups/${lastCreatedGroupId}`)}
+                    >
+                      View group #{lastCreatedGroupId}
+                    </button>
+                    .
+                  </p>
+                ) : null}
               </div>
               <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
@@ -646,8 +717,10 @@ export default function TpoDashboardPage() {
               <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/60 text-xs text-slate-600">
                 {filters ? (
                   <div className="flex flex-wrap items-center gap-4">
+                    <span>Requested: <strong>{filters.requested_target_count ?? "—"}</strong></span>
                     <span>Total: <strong>{filters.total_considered}</strong></span>
-                    <span>Passed: <strong>{filters.passed_filters}</strong></span>
+                    <span>Eligible: <strong>{filters.eligible_count || filters.passed_filters}</strong></span>
+                    <span>Returned: <strong>{filters.returned_count}</strong></span>
                     <span>Rejected CGPA: <strong>{filters.rejected_min_cgpa}</strong></span>
                     <span>Rejected Branch: <strong>{filters.rejected_branch}</strong></span>
                     <span>Rejected Gender: <strong>{filters.rejected_gender}</strong></span>
@@ -662,8 +735,11 @@ export default function TpoDashboardPage() {
                 <div className="px-6 py-3 border-b border-slate-100 text-xs text-slate-600 bg-white">
                   <span className="font-medium text-slate-700">JD:</span>{" "}
                   {[
+                    parsedJD.target_student_count ? `Target ${parsedJD.target_student_count}` : null,
                     parsedJD.job_title ? `Role ${parsedJD.job_title}` : null,
                     parsedJD.min_cgpa !== null ? `Min CGPA ${parsedJD.min_cgpa}` : null,
+                    parsedJD.exclude_active_backlogs ? "No active backlogs" : "Backlog: allowed",
+                    parsedJD.placement_filter === "unplaced_only" ? "Placement: unplaced only" : "Placement: placed + unplaced",
                     parsedJD.allowed_branches.length ? `Branches ${parsedJD.allowed_branches.join(", ")}` : null,
                     parsedJD.gender_filter !== "all_genders" ? `Gender ${parsedJD.gender_filter}` : null,
                   ]
@@ -674,7 +750,17 @@ export default function TpoDashboardPage() {
 
               <div className="overflow-x-auto">
                 <Table className="w-full">
-                  <TableHeader><TableRow className="border-slate-100 hover:bg-transparent"><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Candidate</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Branch</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">CGPA</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Match</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Gender</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Skills</TableHead><TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider w-24">Status</TableHead></TableRow></TableHeader>
+                  <TableHeader>
+                    <TableRow className="border-slate-100 hover:bg-transparent">
+                      <TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Candidate</TableHead>
+                      <TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Branch</TableHead>
+                      <TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">CGPA</TableHead>
+                      <TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Match</TableHead>
+                      <TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Gender</TableHead>
+                      <TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider">Skills</TableHead>
+                      <TableHead className="h-12 px-6 text-xs font-semibold text-slate-500 uppercase tracking-wider w-24">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
                   <TableBody>
                     {!filtered.length ? (
                       <TableRow><TableCell colSpan={7} className="h-64 text-center text-slate-400">{errorMessage ?? "No candidates found matching the criteria."}</TableCell></TableRow>

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from typing import Any, cast
 
 from groq import Groq
@@ -145,6 +146,15 @@ GENDER_MAP: dict[str, str] = {
     "all genders": "all_genders",
 }
 
+TARGET_COUNT_PATTERNS = (
+    re.compile(r"\b(?:need|find|give|require|looking\s*for)\s+(\d{1,4})\s+(?:students?|candidates?)\b", re.IGNORECASE),
+    re.compile(r"\b(\d{1,4})\s+(?:students?|candidates?)\s+(?:needed|required)\b", re.IGNORECASE),
+)
+CGPA_PATTERNS = (
+    re.compile(r"\bcgpa\s*(?:>=|>|at\s*least|min(?:imum)?\s*)\s*(\d(?:\.\d+)?)\b", re.IGNORECASE),
+    re.compile(r"\b(?:min(?:imum)?\s*)?(\d(?:\.\d+)?)\s*cgpa\b", re.IGNORECASE),
+)
+
 
 def _normalize_token(value: str) -> str:
     normalized = " ".join(value.strip().lower().split())
@@ -253,6 +263,91 @@ def _normalize_gender_filter(value: Any, raw_phrase: Any) -> tuple[str, str | No
         return "custom_text", raw_clean
 
     return "all_genders", None
+
+
+def _extract_target_student_count_from_text(jd_text: str) -> int | None:
+    for pattern in TARGET_COUNT_PATTERNS:
+        match = pattern.search(jd_text)
+        if match:
+            try:
+                value = int(match.group(1))
+            except ValueError:
+                continue
+            if value > 0:
+                return value
+    return None
+
+
+def _extract_min_cgpa_from_text(jd_text: str) -> float | None:
+    for pattern in CGPA_PATTERNS:
+        match = pattern.search(jd_text)
+        if match:
+            try:
+                value = float(match.group(1))
+            except ValueError:
+                continue
+            if 0 <= value <= 10:
+                return value
+    return None
+
+
+def _extract_backlog_policy_from_text(jd_text: str) -> bool | None:
+    lowered = jd_text.lower()
+    deny_terms = (
+        "no backlog",
+        "no backlogs",
+        "without backlog",
+        "without backlogs",
+        "no active backlog",
+        "exclude backlog",
+        "exclude backlogs",
+    )
+    if any(term in lowered for term in deny_terms):
+        return True
+    allow_terms = ("backlog allowed", "backlogs allowed")
+    if any(term in lowered for term in allow_terms):
+        return False
+    return None
+
+
+def _extract_placement_filter_from_text(jd_text: str) -> str | None:
+    lowered = jd_text.lower()
+    unplaced_terms = ("unplaced only", "not placed only", "only unplaced")
+    if any(term in lowered for term in unplaced_terms):
+        return "unplaced_only"
+    include_placed_terms = (
+        "include placed",
+        "placed students allowed",
+        "include placed students",
+        "placed if eligible",
+    )
+    if any(term in lowered for term in include_placed_terms):
+        return "placed_or_unplaced"
+    return None
+
+
+def _apply_text_fallbacks(*, jd_text: str, payload: JDAnalyzeResponse) -> JDAnalyzeResponse:
+    updates: dict[str, Any] = {}
+    if payload.target_student_count is None:
+        inferred_count = _extract_target_student_count_from_text(jd_text)
+        if inferred_count is not None:
+            updates["target_student_count"] = inferred_count
+    if payload.min_cgpa is None:
+        inferred_cgpa = _extract_min_cgpa_from_text(jd_text)
+        if inferred_cgpa is not None:
+            updates["min_cgpa"] = inferred_cgpa
+
+    backlog_policy = _extract_backlog_policy_from_text(jd_text)
+    if backlog_policy is not None:
+        updates["exclude_active_backlogs"] = backlog_policy
+
+    placement_filter = _extract_placement_filter_from_text(jd_text)
+    if placement_filter is not None:
+        updates["placement_filter"] = placement_filter
+
+    if not updates:
+        return payload
+    return payload.model_copy(update=updates)
 
 
 def _to_number(value: Any) -> float | None:
@@ -379,4 +474,5 @@ class JDAnalyzerService:
         if not isinstance(payload, dict):
             raise JDAnalyzerServiceError("Model output is not a JSON object.")
 
-        return _normalize_output(payload)
+        normalized = _normalize_output(payload)
+        return _apply_text_fallbacks(jd_text=jd_text, payload=normalized)

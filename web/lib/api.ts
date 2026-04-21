@@ -12,6 +12,7 @@ import type {
   StudentProfileDetail,
   StudentProfilePayload,
   TpoCreateGroupRequest,
+  TpoOverviewResponse,
   TpoAuthTokenResponse,
   TpoGroup,
   TpoMailActionRequest,
@@ -198,6 +199,14 @@ export async function createTpoGroup(body: TpoCreateGroupRequest, tpoToken?: str
 export async function listTpoGroups(tpoToken?: string | null): Promise<TpoGroup[]> {
   const token = tpoToken ?? getStoredTpoToken();
   const { data } = await api.get<TpoGroup[]>("/student/tpo/groups", {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  return data;
+}
+
+export async function getTpoOverview(tpoToken?: string | null): Promise<TpoOverviewResponse> {
+  const token = tpoToken ?? getStoredTpoToken();
+  const { data } = await api.get<TpoOverviewResponse>("/student/tpo/overview", {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
   return data;

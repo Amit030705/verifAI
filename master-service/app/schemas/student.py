@@ -308,6 +308,24 @@ class TpoMailActionResponse(BaseModel):
     message: str
 
 
+class TpoOverviewRecentPlacement(BaseModel):
+    student_id: int
+    name: str
+    email: str
+    company_name: str
+    offer_type: str
+    pay_amount: float | None = None
+    updated_at: datetime
+
+
+class TpoOverviewResponse(BaseModel):
+    total_students: int
+    unplaced_eligible_students: int
+    active_groups: int
+    placed_students: int
+    recent_placements: list[TpoOverviewRecentPlacement] = Field(default_factory=list)
+
+
 class JDParsedConstraints(BaseModel):
     company_name: str | None = None
     pay_or_stipend: str | None = None
@@ -388,6 +406,9 @@ class MatchCandidate(BaseModel):
 class FilterSummary(BaseModel):
     total_considered: int = 0
     passed_filters: int = 0
+    requested_target_count: int | None = None
+    eligible_count: int = 0
+    returned_count: int = 0
     rejected_min_cgpa: int = 0
     rejected_branch: int = 0
     rejected_gender: int = 0

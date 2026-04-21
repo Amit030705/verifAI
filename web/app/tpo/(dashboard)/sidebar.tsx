@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Users, BarChart3, Settings, Search, FolderKanban } from "lucide-react";
+import { Home, BarChart3, Settings, Search, FolderKanban } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { clearTpoAuth, getStoredTpoUsername } from "@/lib/auth-storage";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { name: "Overview", href: "/tpo", icon: Home },
-  { name: "Search", href: "/tpo/search", icon: Search },
-  { name: "Candidates", href: "/tpo/candidates", icon: Users },
+  { name: "AI Search", href: "/tpo/ai-search", icon: Search },
   { name: "Placement Groups", href: "/tpo/placement-groups", icon: FolderKanban },
   { name: "Reports", href: "/tpo/reports", icon: BarChart3 },
   { name: "Settings", href: "/tpo/settings", icon: Settings },

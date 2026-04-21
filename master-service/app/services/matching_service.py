@@ -75,6 +75,7 @@ def run_jd_matching(
 ) -> tuple[JDParsedConstraints, FilterSummary, list[MatchCandidate]]:
     constraints = _parse_constraints(jd_data)
     summary = FilterSummary()
+    summary.requested_target_count = constraints.target_student_count if constraints.target_student_count and constraints.target_student_count > 0 else None
 
     query = db.query(Student).options(joinedload(Student.profile), selectinload(Student.placements))
     if student_ids:
@@ -174,6 +175,7 @@ def run_jd_matching(
 
     summary.total_considered = total_considered
     summary.passed_filters = len(accepted)
+    summary.eligible_count = len(accepted)
     accepted.sort(key=lambda item: (-item[0], item[1].student_id))
     candidates = [item[1] for item in accepted]
 
@@ -182,6 +184,7 @@ def run_jd_matching(
         capped = min(top_k, capped) if capped is not None else top_k
     if capped is not None:
         candidates = candidates[:capped]
+    summary.returned_count = len(candidates)
 
     resume_map = _latest_resume_urls(db, [c.student_id for c in candidates])
     for candidate in candidates:

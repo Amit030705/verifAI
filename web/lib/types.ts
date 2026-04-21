@@ -226,6 +226,24 @@ export interface TpoMailActionResponse {
   message: string;
 }
 
+export interface TpoOverviewRecentPlacement {
+  student_id: number;
+  name: string;
+  email: string;
+  company_name: string;
+  offer_type: "internship" | "job" | string;
+  pay_amount: number | null;
+  updated_at: string;
+}
+
+export interface TpoOverviewResponse {
+  total_students: number;
+  unplaced_eligible_students: number;
+  active_groups: number;
+  placed_students: number;
+  recent_placements: TpoOverviewRecentPlacement[];
+}
+
 export interface FormDataState {
   resumeFile: File | null;
   marksheetFile: File | null;
@@ -295,6 +313,9 @@ export interface JDMatchCandidate {
 export interface JDMatchFilters {
   total_considered: number;
   passed_filters: number;
+  requested_target_count: number | null;
+  eligible_count: number;
+  returned_count: number;
   rejected_min_cgpa: number;
   rejected_branch: number;
   rejected_gender: number;
